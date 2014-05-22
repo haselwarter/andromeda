@@ -236,7 +236,8 @@ and whnf ~use_rws ctx t ((e',loc) as e0) =
  *)
 and new_match_term ctx inst0 k pat pat_ty term ty  =
   let tentative_equal_ty t1 t2 =
-    tentatively (fun () -> equal_ty' ~use_eqs:false ~use_rws:false ctx t1 t2)  in
+    (*tentatively (fun () -> equal_ty' ~use_eqs:false ~use_rws:false ctx t1 t2)  in*)
+    tentatively (fun () -> Syntax.equal_ty t1 t2)  in
 
   (* Match a the pattern (as a spine) against the term (as a spine)
    *)
@@ -245,8 +246,8 @@ and new_match_term ctx inst0 k pat pat_ty term ty  =
       if List.length pat_args = List.length term_args then
         begin
          (* The two spines have equal heads and the same length *)
-         Print.debug "Maybe %t@ will match %t"
-            (print_pattern ctx k pat) (print_term ctx term);
+         (*Print.debug "Maybe %t@ will match %t"              *)
+         (*   (print_pattern ctx k pat) (print_term ctx term);*)
 
          (* Loop throught the arguments and check that they correspond *)
          let rec loop pat_args term_args inst =
@@ -260,8 +261,8 @@ and new_match_term ctx inst0 k pat pat_ty term ty  =
 
                let inst =
                  try
-                   Print.debug "Subpattern %t@ might match %t"
-                      (print_pattern ctx k p) (print_term ctx e);
+                   (*Print.debug "Subpattern %t@ might match %t"   *)
+                   (*   (print_pattern ctx k p) (print_term ctx e);*)
                    (* XXX This call to whnf gets rid of head beta redices in the term
                     * arguments, but also expands head definitions. That might be
                     * more than we want... *)
@@ -286,12 +287,12 @@ and new_match_term ctx inst0 k pat pat_ty term ty  =
        end
       else
         begin
-           Print.debug "Nope; lengths are different";
+           (*Print.debug "Nope; lengths are different";*)
            raise Mismatch
         end
     else
       begin
-        Print.debug "Nope; heads don't match";
+        (*Print.debug "Nope; heads don't match";*)
         raise Mismatch
       end   in
 
@@ -311,14 +312,15 @@ and new_match_term ctx inst0 k pat pat_ty term ty  =
 
    | Pattern.PVar _, _ ->
        (* XXX: Unimplemented! *)
-       Print.debug "XXX new_match_term: PVar without a Ty";
+       (*Print.debug "XXX new_match_term: PVar without a Ty";*)
        raise Mismatch
 
    | Pattern.Term pterm, Pattern.Ty ty' when
        (* XXX Overly conservative? *)
-       tentatively (fun () ->
-          equal_ty' ~use_eqs:false ~use_rws:false ctx ty' ty
-          && equal_term ~use_eqs:false ~use_rws:false ctx pterm term ty) ->
+       (*tentatively (fun () ->                                              *)
+       (*   equal_ty' ~use_eqs:false ~use_rws:false ctx ty' ty               *)
+       (*   && equal_term ~use_eqs:false ~use_rws:false ctx pterm term ty) ->*)
+       Syntax.equal_ty ty' ty && Syntax.equal pterm term ->
        inst0
 
 
@@ -338,17 +340,23 @@ and new_match_term ctx inst0 k pat pat_ty term ty  =
          * pattern Pe1 is a lambda
          * If so, we need to do something else.
          *)
-        Print.debug "About to spine pattern %t" (print_pattern ctx k pat);
+        (*Print.debug "About to spine pattern %t" (print_pattern ctx k pat);*)
         let pat_spine =
           try Pattern.spine_of_term pat
-          with e -> (Print.debug "pattern not spine-able %s"
-                           (Printexc.to_string e); raise e) in
+          with e ->
+            begin
+              (*Print.debug "pattern not spine-able %s" (Printexc.to_string e);*)
+              raise e
+            end in
 
-        let _ = Print.debug "About to spine term %t" (print_term ctx term) in
+        (*let _ = Print.debug "About to spine term %t" (print_term ctx term) in*)
         let term_spine =
           try Pattern.spine_of_brazil term
-          with e -> (Print.debug "term@ %t not spine-able %s"
-                         (print_term ctx term) (Printexc.to_string e); raise e) in
+          with e ->
+            begin
+              (*Print.debug "term@ %t not spine-able %s" (print_term ctx term) (Printexc.to_string e); *)
+              raise e
+            end  in
 
         match_spine pat_spine term_spine
        end
@@ -361,17 +369,16 @@ and new_match_term ctx inst0 k pat pat_ty term ty  =
     resulting term. *)
 
 and rewrite_term ctx e t =
-  Print.debug "@[<hv 4>rewrite_term %d:@ %t@]"
-  (List.length (Context.rewrites ctx)) (print_term ctx e) ;
+  (*Print.debug "@[<hv 4>rewrite_term %d:@ %t@]"                 *)
+  (*    (List.length (Context.rewrites ctx)) (print_term ctx e) ;*)
 
   let match_hint k pt pe1 pe2 =
-        Print.debug "@[<hv 2>match_hint considering if@ %t  matches pattern@ %t at@ %t@]"
-            (print_term ctx e)
-            (print_pattern ctx k pe1)
-            (print_pattern_ty ctx k pt) ;
+    (*Print.debug "@[<hv 2>match_hint considering if@ %t  matches pattern@ %t at@ %t@]"*)
+    (*    (print_term ctx e)                                                           *)
+    (*    (print_pattern ctx k pe1)                                                    *)
+    (*    (print_pattern_ty ctx k pt) ;                                                *)
 
     let inst = new_match_term ctx [] k pe1 pt e t  in
-    let _ = Print.debug "new_match_term returned an instantiation@."  in
     let pe2 = Pattern.subst_term inst 0 pe2  in
     match pe2 with
     | Pattern.Term e2 ->
@@ -399,13 +406,13 @@ and rewrite_term ctx e t =
         (*Print.debug "considering rewriting %t to %t"*)
             (*(print_pattern ctx k pe1) (print_pattern ctx k pe2);*)
         let e2 = match_hint k pt pe1 pe2 in
-        Print.debug "@[<hv 2>rewrote@ %t at@ %t@;<1 -2>to@ %t@;<1 -2> using@ %t and@ %t@]"
-            (print_term ctx e) (print_ty ctx t) (print_term ctx e2)
-            (print_pattern ctx k pe1) (print_pattern ctx k pe2) ;
+        (*Print.debug "@[<hv 2>rewrote@ %t at@ %t@;<1 -2>to@ %t@;<1 -2> using@ %t and@ %t@]"*)
+        (*    (print_term ctx e) (print_ty ctx t) (print_term ctx e2)                       *)
+        (*    (print_pattern ctx k pe1) (print_pattern ctx k pe2) ;                         *)
           whnf ~use_rws:true ctx t e2
         with
-          | Mismatch -> Print.debug "nope"; match_hints hs
-          | Pattern.NoSpine -> Print.debug "nope"; match_hints hs
+          | Mismatch -> (* Print.debug "nope"; *) match_hints hs
+          | Pattern.NoSpine -> (* Print.debug "nope"; *) match_hints hs
           (*| Error.Error (_,s1,s2) -> (Print.debug "unexpected Error %s %s" s1 s2; match_hints hs)*)
           | ex -> (Print.debug "unexpected exception %s"
                         (Printexc.to_string ex); match_hints hs)
@@ -413,17 +420,17 @@ and rewrite_term ctx e t =
   in
   let hs = Context.rewrites ctx in
   let answer = match_hints hs  in
-  let _ = Print.debug "rewrite_term returned %t" (print_term ctx answer) in
+  (*let _ = Print.debug "rewrite_term returned %t" (print_term ctx answer) in*)
   answer
 
 
 (** See if terms [e1] and [e2] of type [t] are equal by an equality hint. *)
 and equal_by_equation ctx t e1 e2 =
-  Print.debug "equal_by_equation? %t@ and %t"
-     (print_term ctx e1) (print_term ctx e2);
+  (*Print.debug "equal_by_equation? %t@ and %t"*)
+  (*   (print_term ctx e1) (print_term ctx e2);*)
   let match_hint k pt pe1 pe2 =
-    Print.debug "considering hint %t = %t"
-      (print_pattern ctx k pe1) (print_pattern ctx k pe2);
+    (*Print.debug "considering hint %t = %t"                *)
+    (*  (print_pattern ctx k pe1) (print_pattern ctx k pe2);*)
     let inst = []  in
     (* Match the left-hand-side and incorporate results into the right-hand-side *)
     let inst = new_match_term ctx inst k pe1 pt e1 t  in
@@ -533,8 +540,8 @@ and equal_whnf_ty ~use_eqs ~use_rws ctx ((t', tloc) as t) ((u', uloc) as u) =
 and equal_term ~use_eqs ~use_rws ctx e1 e2 t =
 
   (*if (not (!tentative)) then*)
-    Print.debug "@[<hv 4>equal_term %b %b:@ %t@;<1 -4> and@ %t@]"
-          use_eqs use_rws (print_term ctx e1) (print_term ctx e2);
+    (*Print.debug "@[<hv 4>equal_term %b %b:@ %t@;<1 -4> and@ %t@]" *)
+    (*      use_eqs use_rws (print_term ctx e1) (print_term ctx e2);*)
 
   (* chk-eq-refl *)
   (Syntax.equal e1 e2)
@@ -559,10 +566,10 @@ and equal_term ~use_eqs ~use_rws ctx e1 e2 t =
  *)
 and equal_ext ~use_eqs ~use_rws ctx ((_, loc1) as e1) ((_, loc2) as e2) ((t', _) as t) =
   begin
-    if (not (!tentative)) then
-      Print.debug "@[<hv 4>equal_ext %b %b:@ %t@;<1 -4> and@ %t@ at %t@]"
-            use_eqs use_rws (print_term ctx e1) (print_term ctx e2)
-            (print_ty ctx t);
+    (*if (not (!tentative)) then                                           *)
+    (*  Print.debug "@[<hv 4>equal_ext %b %b:@ %t@;<1 -4> and@ %t@ at %t@]"*)
+    (*        use_eqs use_rws (print_term ctx e1) (print_term ctx e2)      *)
+    (*        (print_ty ctx t);                                            *)
     match t' with
 
     (* chk-eq-ext-prod *)
@@ -1056,7 +1063,6 @@ and norm_ty ctx ((t', loc) as t) : Syntax.ty =
 
 
 and norm ctx ((e', loc) as e) : Syntax.term =
-  Print.debug "norm %t" (print_term ctx e);
   let answer =
   match e' with
     (* norm-var *)
@@ -1209,11 +1215,11 @@ and norm ctx ((e', loc) as e) : Syntax.term =
       let e3' = norm ctx e3 in
         (Syntax.NameId (alpha, e1', e2', e3'), loc)
   in
-  let _ = Print.debug "Recursive normalization of %t returned %t"
-               (print_term ctx e) (print_term ctx answer)  in
+  (*let _ = Print.debug "Recursive normalization of %t returned %t"*)
+  (*             (print_term ctx e) (print_term ctx answer)  in    *)
   let rw = rewrite_term ctx answer (type_of ctx e)  in
-  let _ = Print.debug "Rewrites gave us %t"
-               (print_term ctx rw)  in
+  (*let _ = Print.debug "Rewrites gave us %t"*)
+  (*             (print_term ctx rw)  in     *)
   if Syntax.equal answer rw then
     answer
   else
