@@ -14,6 +14,8 @@ val for_J : Syntax.ty -> Syntax.name -> Syntax.name -> Syntax.name -> Syntax.nam
 
 val add_def : Syntax.name -> Syntax.ty -> Syntax.term -> t -> t
 
+val add_opaque_def : Syntax.name -> Syntax.ty -> Syntax.term -> t -> t
+
 val add_equation : hint -> t -> t
 
 val add_rewrite : hint -> t -> t
@@ -21,6 +23,8 @@ val add_rewrite : hint -> t -> t
 val lookup_var : Syntax.variable -> t -> Syntax.ty
 
 val lookup_def : Syntax.variable -> t -> Syntax.term option
+
+val lookup_any_def : Syntax.variable -> t -> Syntax.term option
 
 val rewrites : t -> hint list
 

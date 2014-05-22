@@ -19,3 +19,6 @@ val whnf_ty : use_rws:bool -> Context.t -> Syntax.ty -> Syntax.ty
 (** Weak-head normalize a term *)
 val whnf : use_rws:bool -> Context.t -> Syntax.ty -> Syntax.term -> Syntax.term
 
+val type_of : Context.t -> Syntax.term -> Syntax.ty
+val norm : Context.t -> Syntax.term -> Syntax.term
+val norm_ty : Context.t -> Syntax.ty -> Syntax.ty

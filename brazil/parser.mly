@@ -31,6 +31,8 @@
 %token COERCE
 %token EQ EQEQ
 %token EQUATION REWRITE IN
+%token COMPUTE USING UNFOLD
+%token OPAQUE
 %token REFL IDPATH
 %token IND_PATH
 %token UNDERSCORE
@@ -70,6 +72,8 @@ topdef: mark_position(plain_topdef) { $1 }
 plain_topdef:
   | DEFINE x=NAME COLONEQ e=term DOT             { Define (x, e) }
   | DEFINE x=NAME COLON t=ty COLONEQ e=term DOT  { Define (x, (Ascribe(e,t), snd e)) }
+  | OPAQUE DEFINE x=NAME COLONEQ e=term DOT             { OpaqueDefine (x, e) }
+  | OPAQUE DEFINE x=NAME COLON t=ty COLONEQ e=term DOT  { OpaqueDefine (x, (Ascribe(e,t), snd e)) }
   | ASSUME xs=nonempty_list(NAME) COLON t=ty DOT { Assume (xs, t) }
   | TOPREWRITE e=term DOT                        { TopRewrite e }
   | TOPEQUATION e=term DOT                       { TopEquation e }
@@ -93,6 +97,18 @@ plain_term:
   | REWRITE e1=equal_term IN e2=term                { Rewrite (e1, e2) }
   | t1=equal_term ARROW t2=term                     { NameProd (anonymous, t1, t2) }
   | LPAREN x=param COLON t=term RPAREN ARROW e=term { NameProd (x, t, e) }
+  | eqs=nonempty_list(compute_eq)
+    USING pair=reasons
+    IN body=term            { ComputeEquation(eqs,fst pair,snd pair,body) }
+
+compute_eq:
+  COMPUTE EQUATION e1=app_term EQEQ e2=app_term { (e1,e2) }
+
+reasons:
+  |                                  { [], [] }
+  | REWRITE e1=equal_term rs=reasons { e1 :: fst rs, snd rs }
+  | UNFOLD  x=NAME        rs=reasons { fst rs, x :: snd rs }
+
 
 equal_term: mark_position(plain_equal_term) { $1 }
 plain_equal_term:

@@ -6,6 +6,7 @@
   let reserved = [
     ("Parameter", ASSUME ) ;
     ("coerce", COERCE) ;
+    ("compute", COMPUTE);
     ("Definition", DEFINE) ;
     ("Equation", TOPEQUATION) ;
     ("equation", EQUATION) ;
@@ -13,12 +14,15 @@
     ("fun", FUN) ;
     ("idpath", IDPATH) ;
     ("in", IN) ;
-    ("J", IND_PATH);
+    ("J", IND_PATH) ;
+    ("Opaque", OPAQUE) ;
     ("refl", REFL) ;
     ("Rewrite", TOPREWRITE) ;
     ("rewrite", REWRITE) ;
+    ("unfold", UNFOLD) ;
     ("unit", UNIT) ;
     ("Universe", UNIVERSE) ;
+    ("using", USING) ;
   ]
 
 }

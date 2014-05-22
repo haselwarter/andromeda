@@ -11,5 +11,3 @@ val is_type : Context.t -> Common.debruijn Input.ty -> Syntax.ty
 val is_fibered : Context.t -> Common.debruijn Input.ty -> Syntax.ty
 
 
-(** Extract the type of an annotated term *)
-val type_of : Context.t -> Syntax.term -> Syntax.ty

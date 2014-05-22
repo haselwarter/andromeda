@@ -90,6 +90,7 @@ let rec exec_cmd interactive ctx (d, loc) =
                  (fun (ctx,t) x -> (Context.add_var x t ctx, Syntax.shift_ty 1 t))
                  (ctx, t)
                  xs)
+
     | Input.Define (x, e) ->
       let e = Debruijn.term names e in
       let e,t = Typing.syn_term ctx e in
@@ -97,6 +98,14 @@ let rec exec_cmd interactive ctx (d, loc) =
       let t = Syntax.simplify_ty t  in
         if interactive then Format.printf "%s is defined.@\n@." x ;
         Context.add_def x t e ctx
+
+    | Input.OpaqueDefine (x, e) ->
+      let e = Debruijn.term names e in
+      let e,t = Typing.syn_term ctx e in
+      let e = Syntax.simplify e  in
+      let t = Syntax.simplify_ty t  in
+        if interactive then Format.printf "%s is defined.@\n@." x ;
+        Context.add_opaque_def x t e ctx
 
     | Input.TopRewrite e ->
       let e = Debruijn.term names e in

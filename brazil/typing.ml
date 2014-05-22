@@ -204,6 +204,64 @@ let rec syn_term ctx ((term', loc) as term) =
              (Syntax.Universe alpha, loc))
       end
 
+  | Input.ComputeEquation(eqs,es3,xs4,e5) ->
+      begin
+         (* Add the specifically-listed rewrites
+          * and definitions to the context (all as rewrites)
+          *)
+         let hs3 =
+           List.map
+             (fun e3 -> let e3, t3 = syn_term ctx e3 in
+                        Equal.as_hint ctx e3 t3)
+             es3   in
+
+         let make_hint left right t =
+           let e' = Syntax.mkRefl t left  in
+           let t' = Syntax.mkId t left right in
+           Equal.as_hint ctx e' t'   in
+
+
+         let hs4 =
+           List.map
+             (fun k ->
+               let t = Context.lookup_var k ctx in
+               let v = Syntax.mkVar k  in
+               match Context.lookup_any_def k ctx with
+               | None ->
+                   Error.typing ~loc "variable %t has no definition"
+                      (print_term ctx v)
+               | Some def -> make_hint v def t)
+             xs4  in
+         let hints = hs3 @ hs4  in
+         let ctx' =
+           List.fold_right Context.add_rewrite hints ctx in
+
+         let do_eq (e1,e2) =
+           let (e1, t) = syn_term ctx e1 in
+           let e2 = chk_term ctx e2 t in
+           let _ = Print.debug "Normalizing left term %t"
+                          (print_term ctx' e1)  in
+           let e1' = Equal.norm ctx' e1  in
+           let _ = Print.debug "Normalizing right term %t"
+                          (print_term ctx' e2)  in
+           let e2' = Equal.norm ctx' e2  in
+           if (Syntax.equal e1' e2') then
+             begin
+               Print.debug "compute equation for@ %t@ and@ %t succeeded."
+                  (print_term ctx e1) (print_term ctx e2);
+               make_hint e1 e2 t
+             end
+           else
+           Error.typing ~loc
+             "@[<hv 4>Equation components unequal; they compute to@ %t@;<1 -4>and@ %t@]"
+             (print_term ctx e1') (print_term ctx e2')  in
+
+         let equations = List.map do_eq eqs  in
+         let ctx = List.fold_right Context.add_equation equations ctx  in
+           (*let _ = Context.print ctx in*)
+           (*let _ = Print.verbosity := 3 in*)
+         syn_term ctx e5
+      end
 
 and chk_term ctx ((term', loc) as term) t =
 
@@ -320,29 +378,4 @@ and wf_type_is_fibered (ty', _) =
   | Syntax.Unit -> true
   | Syntax.Paths _ -> true
   | Syntax.Id _ -> false
-
-(***********)
-(* type_of *)
-(***********)
-
-let rec type_of ctx (exp, _) =
-  let loc = Position.nowhere in
-  match exp with
-  | Syntax.Var v -> Context.lookup_var v ctx
-  | Syntax.Equation (_, _, body)
-  | Syntax.Rewrite (_, _, body) -> type_of ctx body
-  | Syntax.Ascribe (_, ty) -> ty
-  | Syntax.Lambda (x, t1, t2, _) -> Syntax.Prod(x, t1, t2), loc
-  | Syntax.App ((_, _, t2), _, e2) -> Syntax.beta_ty t2 e2
-  | Syntax.UnitTerm -> Syntax.Unit, loc
-  | Syntax.Idpath (t, e) -> Syntax.Paths(t, e, e), loc
-  | Syntax.J (_, (_, _, _, u), _, e2, e3, e4) -> Syntax.strengthen_ty u [e2; e3; e4]
-  | Syntax.Refl (t, e) -> Syntax.Id(t, e, e), loc
-  | Syntax.Coerce (_, beta, _) -> Syntax.Universe beta, loc
-  | Syntax.NameUnit -> Syntax.Universe Universe.zero, loc
-  | Syntax.NameProd (alpha, beta, _, _, _) -> Syntax.Universe (Universe.max alpha beta), loc
-  | Syntax.NameUniverse alpha -> Syntax.Universe (Universe.succ alpha), loc
-  | Syntax.NamePaths (alpha, _, _, _)
-  | Syntax.NameId    (alpha, _, _, _) -> Syntax.Universe alpha, loc
-
 

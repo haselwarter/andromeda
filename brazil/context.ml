@@ -5,6 +5,7 @@ type hint = int * Pattern.ty * Pattern.term * Pattern.term
 type entry =
   | Variable of Syntax.ty
   | Definition of Syntax.ty * Syntax.term
+  | OpaqueDefinition of Syntax.ty * Syntax.term
   | Equation of hint
   | Rewrite of hint
 
@@ -23,6 +24,10 @@ let print ?(label="") {decls=ds; names=xs} =
       | (Definition (t, e) :: ds), x :: xs ->
         print_names ds xs ;
         Format.printf "@[<hov 4>define %s@;<1 -2>: %t@;<1 -2>:= %t@]@\n"
+          x (Print.ty xs t) (Print.term xs e)
+      | (OpaqueDefinition (t, e) :: ds), x :: xs ->
+        print_names ds xs ;
+        Format.printf "@[<hov 4>define opaque%s@;<1 -2>: %t@;<1 -2>:= %t@]@\n"
           x (Print.ty xs t) (Print.term xs e)
       | (Equation _ :: ds), xs ->
         print_names ds xs ;
@@ -84,6 +89,10 @@ let add_def x t e ctx =
   { decls = Definition (t, e) :: ctx.decls ;
     names = x :: ctx.names }
 
+let add_opaque_def x t e ctx =
+  { decls = OpaqueDefinition (t, e) :: ctx.decls ;
+    names = x :: ctx.names }
+
 let add_equation h ctx =
   { decls = Equation h :: ctx.decls ;
     names = ctx.names }
@@ -96,7 +105,7 @@ let lookup_var index {decls=ds} =
   let rec lookup k = function
     | [] -> Error.impossible "invalid de Bruijn index"
     | (Equation _ | Rewrite _) :: ds -> lookup k ds
-    | (Variable t | Definition (t, _)) :: ds ->
+    | (Variable t | Definition (t, _) | OpaqueDefinition (t, _)) :: ds ->
         if k = 0
         then Syntax.shift_ty (index+1) t
         else lookup (k-1) ds
@@ -104,26 +113,32 @@ let lookup_var index {decls=ds} =
     if index < 0 then Error.impossible "negative de Bruijn index" ;
     lookup index ds
 
-let lookup_def index {decls=ds} =
+let lookup_def' any index {decls=ds} =
   let rec lookup k = function
     | [] -> Error.impossible "invalid de Bruijn index"
     | (Equation _ | Rewrite _) :: ds -> lookup k ds
+    | OpaqueDefinition (_, e) :: _ when k = 0 ->
+        if any then Some (Syntax.shift (index+1) e) else None
+    | Definition (_,e) :: _ when k = 0 ->
+        Some (Syntax.shift (index+1) e)
+    | Variable _ :: _ when k = 0 ->
+        None
+
+    | OpaqueDefinition _ :: ds
+    | Definition _ :: ds
     | Variable _ :: ds ->
-      if k = 0
-      then None
-      else lookup (k-1) ds
-    | Definition (_, e) :: ds ->
-      if k = 0
-      then Some (Syntax.shift (index+1) e)
-      else lookup (k-1) ds
+        lookup (k-1) ds
   in
     if index < 0 then Error.impossible "negative de Bruijn index" ;
     lookup index ds
 
+let lookup_def = lookup_def' false
+let lookup_any_def = lookup_def' true
+
 let equations {decls=lst} =
   let rec collect k = function
     | [] -> []
-    | (Variable _ | Definition _) :: lst -> collect (k+1) lst
+    | (Variable _ | Definition _ | OpaqueDefinition _) :: lst -> collect (k+1) lst
     | Rewrite _ :: lst -> collect k lst
     | Equation (j, pt, pe1, pe2) :: lst ->
       let pt = Pattern.shift_ty k 0 pt
@@ -137,7 +152,7 @@ let equations {decls=lst} =
 let rewrites {decls=lst} =
   let rec collect k = function
     | [] -> []
-    | (Variable _ | Definition _) :: lst -> collect (k+1) lst
+    | (Variable _ | Definition _ | OpaqueDefinition _) :: lst -> collect (k+1) lst
     | Equation _ :: lst -> collect k lst
     | Rewrite (j, pt, pe1, pe2) :: lst ->
       let pt = Pattern.shift_ty k 0 pt

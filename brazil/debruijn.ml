@@ -16,7 +16,7 @@ let lookup x =
     search 0
 
 let rec ty xs (t, loc) =
-  let t = 
+  let t =
     begin match t with
       | Input.El e ->
         let e = term xs e in
@@ -30,7 +30,7 @@ let rec ty xs (t, loc) =
         let t1 = ty xs t1 in
         let t2 = ty (x :: xs) t2 in
           Input.Prod (x, t1, t2)
-            
+
       | Input.Paths (e1, e2) ->
         let e1 = term xs e1 in
         let e2 = term xs e2 in
@@ -44,15 +44,19 @@ let rec ty xs (t, loc) =
   in
     (t, loc)
 
+and var xs loc x =
+     begin match lookup x xs with
+       | Some k -> k
+       | None -> Error.typing ~loc "unknown identifier %s" x
+     end
+
 and term xs (e, loc) =
   let e =
     begin match e with
 
       | Input.Var x ->
-        begin match lookup x xs with
-          | Some k -> Input.Var k
-          | None -> Error.typing ~loc "unknown identifier %s" x
-        end
+          let k = var xs loc x in
+          Input.Var k
 
       | Input.Equation (e1, e2) ->
         let e1 = term xs e1 in
@@ -63,6 +67,13 @@ and term xs (e, loc) =
         let e1 = term xs e1 in
         let e2 = term xs e2 in
           Input.Rewrite (e1, e2)
+
+      | Input.ComputeEquation (eqs, es3, xs4, e5) ->
+        let eqs = List.map (fun (l,r) -> term xs l, term xs r) eqs in
+        let es3 = List.map (term xs) es3 in
+        let xs4 = List.map (var xs loc) xs4 in
+        let e5 = term xs e5 in
+          Input.ComputeEquation (eqs, es3, xs4, e5)
 
       | Input.Ascribe (e, t) ->
         let e = term xs e in

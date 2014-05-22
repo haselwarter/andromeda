@@ -44,6 +44,31 @@ let tentatively f =
   tentative := old;
   answer
 
+(***********)
+(* type_of *)
+(***********)
+
+let rec type_of ctx (exp, _) =
+  let loc = Position.nowhere in
+  match exp with
+  | Syntax.Var v -> Context.lookup_var v ctx
+  | Syntax.Equation (_, _, body)
+  | Syntax.Rewrite (_, _, body) -> type_of ctx body
+  | Syntax.Ascribe (_, ty) -> ty
+  | Syntax.Lambda (x, t1, t2, _) -> Syntax.Prod(x, t1, t2), loc
+  | Syntax.App ((_, _, t2), _, e2) -> Syntax.beta_ty t2 e2
+  | Syntax.UnitTerm -> Syntax.Unit, loc
+  | Syntax.Idpath (t, e) -> Syntax.Paths(t, e, e), loc
+  | Syntax.J (_, (_, _, _, u), _, e2, e3, e4) -> Syntax.strengthen_ty u [e2; e3; e4]
+  | Syntax.Refl (t, e) -> Syntax.Id(t, e, e), loc
+  | Syntax.Coerce (_, beta, _) -> Syntax.Universe beta, loc
+  | Syntax.NameUnit -> Syntax.Universe Universe.zero, loc
+  | Syntax.NameProd (alpha, beta, _, _, _) -> Syntax.Universe (Universe.max alpha beta), loc
+  | Syntax.NameUniverse alpha -> Syntax.Universe (Universe.succ alpha), loc
+  | Syntax.NamePaths (alpha, _, _, _)
+  | Syntax.NameId    (alpha, _, _, _) -> Syntax.Universe alpha, loc
+
+
 (*************************)
 (* Weak-Head Normalizing *)
 (*************************)
@@ -340,12 +365,13 @@ and rewrite_term ctx e t =
   (List.length (Context.rewrites ctx)) (print_term ctx e) ;
 
   let match_hint k pt pe1 pe2 =
-        Print.debug "@[<hv 2>match_hint considering@ %t  vs@ %t at@ %t@]"
+        Print.debug "@[<hv 2>match_hint considering if@ %t  matches pattern@ %t at@ %t@]"
             (print_term ctx e)
             (print_pattern ctx k pe1)
             (print_pattern_ty ctx k pt) ;
 
     let inst = new_match_term ctx [] k pe1 pt e t  in
+    let _ = Print.debug "new_match_term returned an instantiation@."  in
     let pe2 = Pattern.subst_term inst 0 pe2  in
     match pe2 with
     | Pattern.Term e2 ->
@@ -378,15 +404,17 @@ and rewrite_term ctx e t =
             (print_pattern ctx k pe1) (print_pattern ctx k pe2) ;
           whnf ~use_rws:true ctx t e2
         with
-          | Mismatch -> match_hints hs
-          | Pattern.NoSpine -> match_hints hs
+          | Mismatch -> Print.debug "nope"; match_hints hs
+          | Pattern.NoSpine -> Print.debug "nope"; match_hints hs
           (*| Error.Error (_,s1,s2) -> (Print.debug "unexpected Error %s %s" s1 s2; match_hints hs)*)
           | ex -> (Print.debug "unexpected exception %s"
                         (Printexc.to_string ex); match_hints hs)
       end
   in
   let hs = Context.rewrites ctx in
-    match_hints hs
+  let answer = match_hints hs  in
+  let _ = Print.debug "rewrite_term returned %t" (print_term ctx answer) in
+  answer
 
 
 (** See if terms [e1] and [e2] of type [t] are equal by an equality hint. *)
@@ -490,7 +518,7 @@ and equal_whnf_ty ~use_eqs ~use_rws ctx ((t', tloc) as t) ((u', uloc) as u) =
 
     | (Syntax.Universe _ | Syntax.Unit
        | Syntax.Prod _ | Syntax.Paths _ | Syntax.Id _), _ ->
-           (if (not (!tentative)) then
+           (if ((!(Print.verbosity)) >= 3 || not (!tentative)) then
              Print.warning "@[<hv 2>Why are types@ %t@;<1 -2>and@ %t@;<1 -2>equal?@]"
                   (print_ty ctx t) (print_ty ctx u));
            false
@@ -596,12 +624,20 @@ and equal_whnf ~use_eqs ~use_rws ctx ((e1', loc1) as e1) ((e2', loc2) as e2) t =
     | Syntax.Var i1, Syntax.Var i2 -> i1 = i2
 
     (* chk-eq-whnf-app *)
-    | Syntax.App((x, t1, t2), e1, e2), Syntax.App((_, u1, u2), e1', e2') ->
-        equal_ty' ctx t1 u1
-        && equal_ty' (Context.add_var x t1 ctx) t2 u2
-        && equal_whnf ~use_eqs ~use_rws ctx e1 e1' (Syntax.Prod (x, t1, t2), loc1)
-        && equal_term ctx e2 e2' t1
+    | Syntax.App((x, t1, t2), e1', e2'), Syntax.App((_, u1, u2), e1'', e2'') ->
+        if tentatively (fun () -> equal_ty' ctx t1 u1
+                         && equal_ty' (Context.add_var x t1 ctx) t2 u2
+                         && equal_whnf ~use_eqs ~use_rws ctx e1' e1''
+                                       (Syntax.Prod (x, t1, t2), loc1)) then
+           equal_term ctx e2' e2'' t1
+        else
+          begin
+           (if (not (!tentative)) then
+               Print.warning "@[<hv 2>Why are applications@ %t@;<1 -2>and@ %t@;<1 -2>equal?@]"
+                    (print_term ctx e1) (print_term ctx e2));
+           false
 
+          end
     (* chk-eq-whnf-idpath *)
     | Syntax.Idpath(t, e1), Syntax.Idpath(u, e2) ->
         equal_ty' ctx t u && equal_term ctx e1 e2 t
@@ -700,7 +736,7 @@ and equal_whnf ~use_eqs ~use_rws ctx ((e1', loc1) as e1) ((e2', loc2) as e2) t =
       | Syntax.J _ | Syntax.Coerce _ | Syntax.NameUnit
       | Syntax.NameProd _ | Syntax.NameUniverse _ | Syntax.NamePaths _
       | Syntax.NameId _), _ ->
-         (if (not (!tentative)) then
+         (if ((!(Print.verbosity)) >= 3 || not (!tentative)) then
              Print.warning "@[<hv 2>Why are terms@ %t@;<1 -2>and@ %t@;<1 -2>equal?@]"
                   (print_term ctx e1) (print_term ctx e2));
 
@@ -947,6 +983,244 @@ and as_id' ~use_rws ctx t =
     | Syntax.Universe _ | Syntax.El _ | Syntax.Unit | Syntax.Prod _ | Syntax.Paths _ ->
       None
 
+and norm_ty ctx ((t', loc) as t) : Syntax.ty =
+  match t' with
+
+  (* norm-ty-universe *)
+  | Syntax.Universe _ -> t
+
+  | Syntax.El (alpha, e) ->
+    begin match norm ctx e with
+
+      (* norm-ty-el-coerce *)
+      | (Syntax.Coerce (beta, gamma, e), _) ->
+        norm_ty ctx  (Syntax.El (beta, e), loc)
+
+      (* norm-ty-el-unit *)
+      | (Syntax.NameUnit, _) ->
+        (Syntax.Unit, loc)
+
+      (* norm-ty-el-prod *)
+      | (Syntax.NameProd (beta, gamma, x, e1, e2), _) ->
+        let t1 = norm_ty ctx (Syntax.El (beta, e1), snd e1) in
+        let ctx' = Context.add_var x t1 ctx in
+        let t2 = norm_ty ctx' (Syntax.El (gamma, e2), snd e2) in
+          (Syntax.Prod (x, t1, t2), loc)
+
+      (* norm-ty-el-universe *)
+      | (Syntax.NameUniverse beta, _) ->
+        (Syntax.Universe beta, loc)
+
+      (* norm-ty-el-paths *)
+      | (Syntax.NamePaths (beta, e1, e2, e3), _) ->
+        let t1 = norm_ty ctx (Syntax.El (alpha, e1), loc) in
+        let e2' = norm ctx e2 in
+        let e3' = norm ctx e3 in
+          (Syntax.Paths (t1, e2', e3'), loc)
+
+      (* norm-ty-el-id *)
+      | (Syntax.NameId (beta, e1, e2, e3), _) ->
+        let t1 = norm_ty ctx (Syntax.El (alpha, e1), loc) in
+        let e2' = norm ctx e2 in
+        let e3' = norm ctx e3 in
+          (Syntax.Id (t1, e2', e3'), loc)
+
+      (* norm-ty-el-other *)
+      | e ->
+        (Syntax.El (alpha, e), loc)
+    end
+
+  (* norm-ty-unit *)
+  | Syntax.Unit -> t
+
+  (* norm-ty-prod *)
+  | Syntax.Prod (x, t, u) ->
+    let t' = norm_ty ctx t in
+    let ctx' = Context.add_var x t ctx in
+    let u' = norm_ty ctx' u in
+      (Syntax.Prod (x, t', u'), loc)
+
+  (* norm-ty-paths *)
+  | Syntax.Paths (t, e1, e2) ->
+    let t' = norm_ty ctx t in
+    let e1' = norm ctx e1 in
+    let e2' = norm ctx e2 in
+      (Syntax.Paths (t', e1', e2'), loc)
+
+  (* norm-ty-id *)
+  | Syntax.Id (t, e1, e2) ->
+    let t' = norm_ty ctx t in
+    let e1' = norm ctx e1 in
+    let e2' = norm ctx e2 in
+      (Syntax.Id (t', e1', e2'), loc)
+
+
+and norm ctx ((e', loc) as e) : Syntax.term =
+  Print.debug "norm %t" (print_term ctx e);
+  let answer =
+  match e' with
+    (* norm-var *)
+    | Syntax.Var k ->
+        begin match Context.lookup_def k ctx with
+          | None -> e
+          | Some e' -> norm ctx e'
+        end
+
+    (* norm-equation *)
+    | Syntax.Equation (_e1, (_e2, _e3), e4) ->
+      norm ctx e4
+
+    (* norm-rewrite *)
+    | Syntax.Rewrite (_e1, (_e2, _e3), e4) ->
+      norm ctx e4
+
+    (* norm-ascribe *)
+    | Syntax.Ascribe (e, _t) ->
+      norm ctx e
+
+    (* norm-star *)
+    | Syntax.UnitTerm -> e
+
+    (* norm-abs *)
+    | Syntax.Lambda (x, t1, t2, e) ->
+      let t1' = norm_ty ctx t1 in
+      let ctx = Context.add_var x t1 ctx  in
+      let t2' = norm_ty ctx t2 in
+      let e' = norm ctx e in
+        (Syntax.Lambda (x, t1', t2', e'), loc)
+
+    | Syntax.App ((x, t1, t2), e1, e2) ->
+      let t1' = norm_ty ctx t1 in
+      let t2' = norm_ty (Context.add_var x t1 ctx) t2 in
+        begin match norm ctx e1 with
+
+          (* norm-app-redex *)
+          | (Syntax.Lambda (_, u1, u2, e1'), _)
+              when Syntax.equal_ty t1' u1 && Syntax.equal_ty t2' u2 ->
+            let e2' = norm ctx e2 in
+              norm ctx (Syntax.beta e1' e2')
+
+          (* norm-app-other *)
+          | e1' ->
+            let e2' = norm ctx e2 in
+              (Syntax.App ((x, t1', t2'), e1', e2'), loc)
+        end
+
+    (* norm-idpath *)
+    | Syntax.Idpath (t, e) ->
+      let t' = norm_ty ctx t in
+      let e' = norm ctx e in
+        (Syntax.Idpath (t', e'), loc)
+
+    (* norm-refl *)
+    | Syntax.Refl (t, e) ->
+      let t' = norm_ty ctx t in
+      let e' = norm ctx e in
+        (Syntax.Refl (t', e'), loc)
+
+    | Syntax.J (t, (x, y, p, u), (z, e1), e2, e3, e4) ->
+      let t' = norm_ty ctx t in
+        begin match norm ctx e2 with
+
+          (* norm-j-redex *)
+          | (Syntax.Idpath (t'', e2'), _)
+               when Syntax.equal_ty t' t'' ->
+             let ctx_z = Context.add_var z t ctx  in
+             let e1' = norm ctx_z e1 in
+               norm ctx (Syntax.beta e1' e2')
+
+          (* norm-j-other *)
+          | e2' ->
+            let ctx_xy = Context.add_vars [x, t; y, t] ctx  in
+            let ctx_xyp = Context.add_var
+                  p (Syntax.mkPaths t (Syntax.mkVar 1) (Syntax.mkVar 2)) ctx_xy  in
+            let u' = norm_ty ctx_xyp u in
+            let e1' = norm ctx e1 in
+            let e3' = norm ctx e3 in
+            let e4' = norm ctx e4 in
+              (Syntax.J (t', (x, y, p, u'), (z, e1'), e2', e3', e4'), loc)
+        end
+
+    | Syntax.Coerce (alpha, beta, e) ->
+      begin match norm ctx e with
+
+        (* norm-coerce-trivial *)
+        | e' when Universe.eq alpha beta -> e'
+
+        (* norm-coerce-trans *)
+        | (Syntax.Coerce (gamma, delta, e'), loc)
+            when Universe.eq alpha delta ->
+          norm ctx (Syntax.Coerce (gamma, beta, e'), loc)
+
+        (* norm-coerce-pi *)
+        | (Syntax.NameProd (gamma, delta, x, e1, e2), loc)
+            when Universe.eq alpha (Universe.max gamma delta) &&
+                 Universe.leq gamma alpha && Universe.leq delta alpha ->
+          let e1' = norm ctx (Syntax.Coerce (gamma, beta, e1), snd e1) in
+          let ctx' = Context.add_var x (Syntax.mkUniverse gamma) ctx in
+          let e2' = norm ctx' (Syntax.Coerce (delta, beta, e2), snd e2) in
+            (Syntax.NameProd (beta, beta, x, e1', e2'), loc)
+
+        (* norm-coerce-paths *)
+        | (Syntax.NamePaths (gamma, e1, e2, e3), loc)
+            when Universe.eq alpha gamma ->
+          let e1' = norm ctx (Syntax.Coerce (alpha, beta, e1), snd e1) in
+          let e2' = norm ctx e2 in
+          let e3' = norm ctx e3 in
+            (Syntax.NamePaths (beta, e1', e2', e3'), loc)
+
+        (* norm-coerce-id *)
+        | (Syntax.NameId (gamma, e1, e2, e3), loc)
+            when Universe.eq alpha gamma ->
+          let e1' = norm ctx (Syntax.Coerce (alpha, beta, e1), snd e1) in
+          let e2' = norm ctx e2 in
+          let e3' = norm ctx e3 in
+            (Syntax.NameId (beta, e1', e2', e3'), loc)
+
+        (* name-coerce-other *)
+        | e' ->
+          (Syntax.Coerce (alpha, beta, e'), loc)
+      end
+
+    (* norm-name-unit *)
+    | Syntax.NameUnit -> e
+
+    (* norm-name-prod *)
+    | Syntax.NameProd (alpha, beta, x, e1, e2) ->
+      let e1' = norm ctx e1 in
+      let ctx' = Context.add_var x (Syntax.mkUniverse alpha) ctx in
+      let e2' = norm ctx' e2 in
+        (Syntax.NameProd (alpha, beta, x, e1', e2'), loc)
+
+    (* norm-name-universe *)
+    | Syntax.NameUniverse _ -> e
+
+    (* norm-name-paths *)
+    | Syntax.NamePaths (alpha, e1, e2, e3) ->
+      let e1' = norm ctx e1 in
+      let e2' = norm ctx e2 in
+      let e3' = norm ctx e3 in
+        (Syntax.NamePaths (alpha, e1', e2', e3'), loc)
+
+    (* norm-name-id *)
+    | Syntax.NameId (alpha, e1, e2, e3) ->
+      let e1' = norm ctx e1 in
+      let e2' = norm ctx e2 in
+      let e3' = norm ctx e3 in
+        (Syntax.NameId (alpha, e1', e2', e3'), loc)
+  in
+  let _ = Print.debug "Recursive normalization of %t returned %t"
+               (print_term ctx e) (print_term ctx answer)  in
+  let rw = rewrite_term ctx answer (type_of ctx e)  in
+  let _ = Print.debug "Rewrites gave us %t"
+               (print_term ctx rw)  in
+  if Syntax.equal answer rw then
+    answer
+  else
+    norm ctx rw
+
+
+
 let equal_ty = equal_ty' ~use_eqs:true ~use_rws:true
 
 let as_prod = as_prod' ~use_rws:true
@@ -954,3 +1228,5 @@ let as_paths = as_paths' ~use_rws:true
 let as_id = as_id' ~use_rws:true
 let as_universe = as_universe' ~use_rws:true
 let as_hint = as_hint' ~use_rws:true
+
+
