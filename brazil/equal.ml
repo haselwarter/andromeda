@@ -651,13 +651,19 @@ and equal_whnf ~use_eqs ~use_rws ctx ((e1', loc1) as e1) ((e2', loc2) as e2) t =
                                        (Syntax.Prod (x, t1, t2), loc1)) then
            equal_term ctx e2' e2'' t1
         else
-          begin
-           (if (not (!tentative)) then
-               Print.warning "@[<hv 2>Why are applications@ %t@;<1 -2>and@ %t@;<1 -2>equal?@]"
-                    (print_term ctx e1) (print_term ctx e2));
-           false
+          let e1'' = Syntax.simplify e1  in
+          let e2'' = Syntax.simplify e2  in
+          if (Syntax.equal e1 e1'' && Syntax.equal e2 e2'') then
+            begin
+             ((if (not (!tentative)) then
+                 Print.warning "@[<hv 2>Why are applications@ %t@;<1 -2>and@ %t@;<1 -2>equal?@]"
+                      (print_term ctx e1) (print_term ctx e2));
+             false)
 
-          end
+            end
+          else
+            equal_term ctx e1'' e2'' t
+
     (* chk-eq-whnf-idpath *)
     | Syntax.Idpath(t, e1), Syntax.Idpath(u, e2) ->
         equal_ty' ctx t u && equal_term ctx e1 e2 t
@@ -756,11 +762,16 @@ and equal_whnf ~use_eqs ~use_rws ctx ((e1', loc1) as e1) ((e2', loc2) as e2) t =
       | Syntax.J _ | Syntax.Coerce _ | Syntax.NameUnit
       | Syntax.NameProd _ | Syntax.NameUniverse _ | Syntax.NamePaths _
       | Syntax.NameId _), _ ->
-         (if ((!(Print.verbosity)) >= 3 || not (!tentative)) then
-             Print.warning "@[<hv 2>Why are terms@ %t@;<1 -2>and@ %t@;<1 -2>equal?@]"
-                  (print_term ctx e1) (print_term ctx e2));
+          let e1'' = Syntax.simplify e1  in
+          let e2'' = Syntax.simplify e2  in
+          if (Syntax.equal e1 e1'' && Syntax.equal e2 e2'') then
+           ((if ((!(Print.verbosity)) >= 3 || not (!tentative)) then
+               Print.warning "@[<hv 2>Why are terms@ %t@;<1 -2>and@ %t@;<1 -2>equal?@]"
+                    (print_term ctx e1) (print_term ctx e2));
 
-          false
+            false)
+          else
+            equal_term ctx e1'' e2'' t
   end
 
 and as_hint' ~use_rws ctx (_, loc) t =
