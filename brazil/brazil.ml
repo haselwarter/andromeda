@@ -179,8 +179,7 @@ let main =
   (* Set the maximum depth of pretty-printing, after which it prints ellipsis. *)
   Format.set_max_boxes 42 ;
   Format.set_ellipsis_text "..." ;
-  if (!(Print.verbosity) >= 3) then
-    Format.set_margin 160;
+  Format.set_margin 200;
   try
     (* Run and load all the specified files. *)
     let ctx = List.fold_left use_file Context.empty !files in

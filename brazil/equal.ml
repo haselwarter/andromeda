@@ -234,6 +234,7 @@ and whnf ~use_rws ctx t ((e',loc) as e0) =
 
 (** new_match_term ctx pat e t
  *)
+(*
 and new_match_term ctx inst0 k pat pat_ty term ty  =
   let tentative_equal_ty t1 t2 =
     (*tentatively (fun () -> equal_ty' ~use_eqs:false ~use_rws:false ctx t1 t2)  in*)
@@ -360,7 +361,7 @@ and new_match_term ctx inst0 k pat pat_ty term ty  =
 
         match_spine pat_spine term_spine
        end
-
+*)
 
 
 
@@ -378,7 +379,10 @@ and rewrite_term ctx e t =
     (*    (print_pattern ctx k pe1)                                                    *)
     (*    (print_pattern_ty ctx k pt) ;                                                *)
 
-    let inst = new_match_term ctx [] k pe1 pt e t  in
+    let inst = []  in
+    (*let inst = new_match_term ctx inst k pe1 pt e t  in*)
+    let inst =  match_term ~magenta:true k inst 0 ctx pe1 e t  in
+    (*let _ = Print.debug "match_hint: instantiation succeeded" in*)
     let pe2 = Pattern.subst_term inst 0 pe2  in
     match pe2 with
     | Pattern.Term e2 ->
@@ -403,16 +407,20 @@ and rewrite_term ctx e t =
       e
     | (k, pt, pe1, pe2) :: hs ->
       begin try
-        (*Print.debug "considering rewriting %t to %t"*)
-            (*(print_pattern ctx k pe1) (print_pattern ctx k pe2);*)
+        (*Print.debug "considering rewriting %t to %t"            *)
+        (*    (print_pattern ctx k pe1) (print_pattern ctx k pe2);*)
         let e2 = match_hint k pt pe1 pe2 in
         (*Print.debug "@[<hv 2>rewrote@ %t at@ %t@;<1 -2>to@ %t@;<1 -2> using@ %t and@ %t@]"*)
         (*    (print_term ctx e) (print_ty ctx t) (print_term ctx e2)                       *)
         (*    (print_pattern ctx k pe1) (print_pattern ctx k pe2) ;                         *)
-          whnf ~use_rws:true ctx t e2
+        whnf ~use_rws:true ctx t e2
         with
-          | Mismatch -> (* Print.debug "nope"; *) match_hints hs
-          | Pattern.NoSpine -> (* Print.debug "nope"; *) match_hints hs
+          | Mismatch ->
+              (*Print.debug "nope";*)
+                match_hints hs
+          | Pattern.NoSpine ->
+              (*Print.debug "nope"; *)
+              match_hints hs
           (*| Error.Error (_,s1,s2) -> (Print.debug "unexpected Error %s %s" s1 s2; match_hints hs)*)
           | ex -> (Print.debug "unexpected exception %s"
                         (Printexc.to_string ex); match_hints hs)
@@ -433,12 +441,14 @@ and equal_by_equation ctx t e1 e2 =
     (*  (print_pattern ctx k pe1) (print_pattern ctx k pe2);*)
     let inst = []  in
     (* Match the left-hand-side and incorporate results into the right-hand-side *)
-    let inst = new_match_term ctx inst k pe1 pt e1 t  in
+    (*let inst = new_match_term ctx inst k pe1 pt e1 t  in*)
+    let inst =  match_term ~magenta:true k inst 0 ctx pe1 e1 t  in
     let pt = Pattern.subst_ty inst 0 pt
     and pe2 = Pattern.subst_term inst 0 pe2 in
 
     (* Match the right-hand-side *)
-    let inst = new_match_term ctx inst k pe2 pt e2 t  in
+    (*let inst = new_match_term ctx inst k pe2 pt e2 t  in*)
+    let inst =  match_term ~magenta:true k [] 0 ctx pe2 e2 t  in
 
     (* Instantiate and check *)
     let pt = Pattern.subst_ty inst 0 pt
@@ -469,6 +479,7 @@ and equal_by_equation ctx t e1 e2 =
 
 (* Equality of types *)
 and equal_ty' ~use_rws ~use_eqs ctx t u =
+  (*Print.debug "equal_ty'@ %t@ %t" (print_ty ctx t) (print_ty ctx u);*)
 
   (* chk-tyeq-refl *)
   (Syntax.equal_ty t u)
@@ -566,10 +577,9 @@ and equal_term ~use_eqs ~use_rws ctx e1 e2 t =
  *)
 and equal_ext ~use_eqs ~use_rws ctx ((_, loc1) as e1) ((_, loc2) as e2) ((t', _) as t) =
   begin
-    (*if (not (!tentative)) then                                           *)
-    (*  Print.debug "@[<hv 4>equal_ext %b %b:@ %t@;<1 -4> and@ %t@ at %t@]"*)
-    (*        use_eqs use_rws (print_term ctx e1) (print_term ctx e2)      *)
-    (*        (print_ty ctx t);                                            *)
+      (*Print.debug "@[<hv 4>equal_ext %b %b:@ %t@;<1 -4> and@ %t@ at %t@]"*)
+      (*      use_eqs use_rws (print_term ctx e1) (print_term ctx e2)      *)
+      (*      (print_ty ctx t);                                            *)
     match t' with
 
     (* chk-eq-ext-prod *)
@@ -613,6 +623,9 @@ and equal_ext ~use_eqs ~use_rws ctx ((_, loc1) as e1) ((_, loc2) as e2) ((t', _)
                  e2 : t
  *)
 and equal_whnf ~use_eqs ~use_rws ctx ((e1', loc1) as e1) ((e2', loc2) as e2) t =
+      (*Print.debug "@[<hv 4>equal_whnf %b %b:@ %t@;<1 -4> and@ %t@ at %t@]"*)
+      (*      use_eqs use_rws (print_term ctx e1) (print_term ctx e2)       *)
+      (*      (print_ty ctx t);                                             *)
   let equal_ty' = equal_ty' ~use_eqs ~use_rws
   and equal_term = equal_term ~use_eqs ~use_rws
   in
@@ -767,13 +780,14 @@ and as_hint' ~use_rws ctx (_, loc) t =
   let pe2 = Pattern.of_term k e2 in
     (k, pt, pe1, pe2)
 
-(*
-
 (* Simple matching of a type pattern against a type. *)
-and match_ty ~magenta inst l ctx pt ((t',loc) as t) =
-  let match_term = match_term ~magenta
-  and match_magenta = if magenta then match_ty ~magenta else (fun inst _ _ _ _ -> inst)
-  and match_ty = match_ty ~magenta
+and match_ty ~magenta k inst l ctx pt ((t',loc) as t) =
+  let pt = (match inst with [] -> pt | _ -> Pattern.subst_ty inst l pt) in
+  (*Print.debug "match_ty: type %t, pat %t" (print_ty ctx t) (print_pattern_ty ctx k pt);*)
+
+  let match_term = match_term ~magenta k
+  and match_magenta = if magenta then match_ty ~magenta k else (fun inst _ _ _ _ -> inst)
+  and match_ty = match_ty ~magenta k
   in
   match pt with
 
@@ -823,31 +837,41 @@ and match_ty ~magenta inst l ctx pt ((t',loc) as t) =
       end
 
 (* Simple matching of a term pattern against a term. *)
-and match_term ~magenta inst l ctx p e t =
-  let match_term = match_term ~magenta
-  and match_magenta = if magenta then match_ty ~magenta else (fun inst _ _ _ _ -> inst)
-  and match_ty = match_ty ~magenta
+and match_term ~magenta k inst l ctx p e t =
+  let p = (match inst with [] -> p | _ -> Pattern.subst_term inst l p)  in
+  (*Print.debug "match_term, term %t,@ pat %t"   *)
+  (*  (print_term ctx e) (print_pattern ctx k p);*)
+  let match_term = match_term ~magenta k
+  and match_magenta = if magenta then match_ty ~magenta k else (fun inst _ _ _ _ -> inst)
+  and match_ty = match_ty ~magenta k
   in
   match p with
 
   | Pattern.Term e' ->
-    if equal_term ~use_eqs:false ~use_rws:true ctx e' e t
+    if Syntax.equal e' e
     then inst
     else raise Mismatch
 
   | Pattern.PVar i ->
     begin
       try
+        (*Print.debug "PVar: i = %d, depth = %d, l = %d, e = %t"        *)
+        (*   i  (List.length (Context.names ctx)) l  (print_term ctx e);*)
         let e' = List.assoc i inst in
-        if equal_term ~use_eqs:false ~use_rws:true ctx e' e t
+        let e'  = Syntax.shift l e'  in
+        (*let _ = Print.debug "Repeat on pattern variable %d = %t"*)
+        (*              i (print_term ctx e')  in                 *)
+        if equal_term ~use_eqs:false ~use_rws:false ctx e' e t
         then inst
         else raise Mismatch
       with
-        | Not_found -> (i,e) :: inst
+        | Not_found ->
+            let e  = Syntax.shift ~exn:Mismatch (- l)  e  in
+            (i,e) :: inst
     end
 
   | Pattern.Lambda (_, pt1, pt2, pe) ->
-    begin match fst (whnf ~use_rws:false ctx t e) with
+    begin match fst e with
       | Syntax.Lambda (x, t1, t2, e) ->
         let inst = match_ty inst l ctx pt1 t1 in
         let ctx' = Context.add_var x t1 ctx in
@@ -858,18 +882,21 @@ and match_term ~magenta inst l ctx p e t =
     end
 
   | Pattern.App ((_, pt1, pt2), pe1, pe2) ->
-    begin match fst (whnf ~use_rws:false ctx t e) with
+    begin match fst e with
       | Syntax.App ((x, t1, t2), e1, e2) ->
+        (* We need to match the function part first, since in
+           the case of a spine it probably sets metavariables
+           (including type families) that occur in the type. *)
+        let inst = match_term inst l ctx pe1 e1 (Syntax.Prod (x, t1, t2), Position.nowhere) in
         let inst = match_magenta inst l ctx pt1 t1 in
         let inst = match_magenta inst (l+1) (Context.add_var x t1 ctx) pt2 t2 in
-        let inst = match_term inst l ctx pe1 e1 (Syntax.Prod (x, t1, t2), Position.nowhere) in
         let inst = match_term inst l ctx pe2 e2 t1 in
           inst
       | _ -> raise Mismatch
     end
 
   | Pattern.Idpath (pt, pe) ->
-    begin match fst (whnf ~use_rws:false ctx t e) with
+    begin match fst e with
       | Syntax.Idpath (t, e) ->
         let inst = match_magenta inst l ctx pt t in
         let inst = match_term inst l ctx pe e t in
@@ -878,7 +905,7 @@ and match_term ~magenta inst l ctx p e t =
     end
 
   | Pattern.J (pt, (_,_,_,pu), (_,pe1), pe2, pe3, pe4) ->
-    begin match fst (whnf ~use_rws:false ctx t e) with
+    begin match fst e with
       | Syntax.J (t, (x,y,p,u), (z,e1), e2, e3, e4) ->
         let inst = match_magenta inst l ctx pt t in
         let ctx_xyp, ctx_z = Context.for_J t x y p z ctx in
@@ -893,7 +920,7 @@ and match_term ~magenta inst l ctx p e t =
     end
 
   | Pattern.Refl (pt, pe) ->
-    begin match fst (whnf ~use_rws:false ctx t e) with
+    begin match fst e with
       | Syntax.Refl (t, e) ->
         let inst = match_magenta inst l ctx pt t in
         let inst = match_term inst l ctx pe e t in
@@ -904,7 +931,7 @@ and match_term ~magenta inst l ctx p e t =
    (** XXX should switch to comparing type names *)
 
   | Pattern.Coerce (alpha, beta, pe) ->
-    begin match fst (whnf ~use_rws:false ctx t e) with
+    begin match fst e with
       | Syntax.Coerce (gamma, delta, e)
           when Universe.eq alpha gamma && Universe.eq beta delta ->
         let inst = match_term inst l ctx pe e (Syntax.Universe alpha, Position.nowhere) in
@@ -913,7 +940,7 @@ and match_term ~magenta inst l ctx p e t =
     end
 
   | Pattern.NameProd (alpha, beta, _, pe1, pe2) ->
-    begin match fst (whnf ~use_rws:false ctx t e) with
+    begin match fst e with
       | Syntax.NameProd (gamma, delta, x, e1, e2)
           when Universe.eq alpha gamma && Universe.eq beta delta ->
         let inst = match_term inst l ctx pe1 e1 (Syntax.Universe gamma, Position.nowhere) in
@@ -931,7 +958,7 @@ and match_term ~magenta inst l ctx p e t =
     end
 
   | Pattern.NamePaths (alpha, pe1, pe2, pe3) ->
-    begin match fst (whnf ~use_rws:false ctx t e) with
+    begin match fst e with
       | Syntax.NamePaths (beta, e1, e2, e3)
           when Universe.eq alpha beta ->
         let inst = match_term inst l ctx pe1 e1 (Syntax.Universe beta, Position.nowhere) in
@@ -942,7 +969,7 @@ and match_term ~magenta inst l ctx p e t =
     end
 
   | Pattern.NameId (alpha, pe1, pe2, pe3) ->
-    begin match fst (whnf ~use_rws:false ctx t e) with
+    begin match fst e with
       | Syntax.NameId (beta, e1, e2, e3)
           when Universe.eq alpha beta ->
         let inst = match_term inst l ctx pe1 e1 (Syntax.Universe beta, Position.nowhere) in
@@ -951,7 +978,6 @@ and match_term ~magenta inst l ctx p e t =
           inst
       | _ -> raise Mismatch
     end
-*)
 
 
 and as_prod' ~use_rws ctx t =

@@ -32,4 +32,9 @@ Definition and := fun (a b : bool) => cond bool a b false.
 
 Definition test1 := 
   fun (A : Type) (a b : A) =>
-    (refl a :: (a == cond A ((fun x : bool => x) true) a b)).
+   compute equation
+     a == cond A ((fun x : bool => x) true) a b
+   using
+     rewrite cond_true
+   in
+      (refl a :: (a == cond A ((fun x : bool => x) true) a b)).

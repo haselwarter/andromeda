@@ -42,7 +42,6 @@ Opaque Definition mult :=
 
 Opaque Definition id := N_ind (fun _ : N => N) 0 (fun (_ : N) (k : N) => S k).
 
-(*
 Definition check_evil :=
   compute equation
      id (id (S (S 0))) == S (S 0)
@@ -52,7 +51,6 @@ Definition check_evil :=
      rewrite N_ind_S
   in 
      refl (id (id (S (S 0)))) :: S (S 0) == S (S 0).
-     *)
 
 Definition one := S 0.
 Definition two := S (S 0).
@@ -114,4 +112,6 @@ Definition check_20 :=
    rewrite N_ind_S
  in
    refl (mult ten ten) :: mult ten ten == mult twenty (S (S (S (S (S 0))))).
-*)
+   *)
+
+#context
