@@ -204,7 +204,7 @@ and string_of_computation ctx (comp, _loc) =
   | MkVar n -> tag "MkVar" [string_of_int n]
   | MkLam (x,e,c) ->
       (* XXX: Need to add x to the context! *)
-      let dummy_ty = (Syntax.Unit, Position.nowhere)  in
+      let dummy_ty = Syntax.mkUnit ()  in
       tag "MkLam" [x; recur e; string_of_computation (Context.add_var x dummy_ty ctx ) c]
   | RunML _ -> tag "RunML" ["-"]
 

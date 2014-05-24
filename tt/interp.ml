@@ -46,11 +46,11 @@ let fresh_name =
  *)
 let abstract ctx x t =
   let rec loop = function
-    | I.VTerm body, loc -> I.mkVTerm ~loc (Syntax.Lambda(x, t, Equal.type_of ctx body, body), loc)
+    | I.VTerm body, loc -> I.mkVTerm ~loc (Syntax.mkLambda ~loc x t (Equal.type_of ctx body) body)
     | I.VTuple es, loc  -> I.mkVTuple ~loc (List.map loop es)
     | I.VInj (i, e), loc -> I.mkVInj ~loc i (loop e)
-    | I.VType u, loc -> I.mkVFakeTypeFamily 1 (Syntax.Prod(x, t, u), loc)
-    | I.VFakeTypeFamily (n,u), loc -> I.mkVFakeTypeFamily (n+1) (Syntax.Prod(x, t, u), loc)
+    | I.VType u, loc -> I.mkVFakeTypeFamily 1 (Syntax.mkProd~loc x t u)
+    | I.VFakeTypeFamily (n,u), loc -> I.mkVFakeTypeFamily (n+1) (Syntax.mkProd ~loc x t u)
     | (_, loc) -> Error.runtime ~loc "Bad body to MkLam"  in
   loop
 
@@ -84,7 +84,7 @@ let extend_context_with_witnesses =
   *)
 let wrap_syntax_with_witness ctx b v =
   let w = witness_of_value ctx v in
-  Syntax.Equation(w, Equal.type_of ctx w, b), Position.nowhere
+  Syntax.mkEquation w (Equal.type_of ctx w) b
 
 (** [wrap_syntax_with_witnesses ctx b l] produces a Brazil term
     wrapping [b], but for a list [l] of Brazil term values.
@@ -176,15 +176,18 @@ let rec insert_matched ctx env (v,pat) =
 
   | I.VTerm (Syntax.NameProd(alpha,beta,x,b1,b2),loc), I.PProd(pat1,pat2) ->
       insert_matched ctx (insert_matched ctx env (I.mkVTerm ~loc b1, pat1))
-             (I.mkVTerm ~loc
-             (Syntax.Lambda(x,(Syntax.El(alpha,b1),loc),(Syntax.Universe beta, loc), b2),loc), pat2)
+             (I.mkVTerm ~loc (Syntax.mkLambda ~loc x (Syntax.mkEl ~loc alpha b1)
+                                  (Syntax.mkUniverse ~loc beta) b2),
+             pat2)
 
   | I.VTerm (Syntax.NameProd(alpha,beta,x,b1,b2),loc), I.PProdFull(pat1,pat2,pat3,pat4) ->
       let env = insert_matched ctx env (I.mkVTerm ~loc b1, pat1)  in
       let env = insert_matched ctx env
-           (I.mkVTerm ~loc (Syntax.Lambda(x,(Syntax.El(alpha,b1),loc),(Syntax.Universe beta, loc), b2),loc), pat3)  in
-      let env = insert_matched ctx env (I.mkVType ~loc (Syntax.Universe alpha, loc), pat2)  in
-      let env = insert_matched ctx env (I.mkVType ~loc (Syntax.Universe beta, loc), pat4)  in
+           (I.mkVTerm ~loc (Syntax.mkLambda ~loc x (Syntax.mkEl ~loc alpha b1)
+                           (Syntax.mkUniverse ~loc beta) b2),
+            pat3)  in
+      let env = insert_matched ctx env (I.mkVType ~loc (Syntax.mkUniverse ~loc alpha), pat2)  in
+      let env = insert_matched ctx env (I.mkVType ~loc (Syntax.mkUniverse ~loc beta), pat4)  in
       env
 
   | _, (I.PConst _ | I.PInj _ | I.PTuple _
@@ -339,7 +342,7 @@ and eval_explode ctx _env loc value =
 
   let mkstr s = I.mkVConst (I.String s)  in
 
-  let do_u u = I.mkVType (Syntax.Universe u, Position.nowhere)in
+  let do_u u = I.mkVType (Syntax.mkUniverse u) in
 
   let rec do_type ((ty',loc) as ty) =
     let components =
@@ -371,16 +374,16 @@ and eval_explode ctx _env loc value =
         | Syntax.Idpath(t1,e2) -> [mkstr "Idpath"; I.mkVType t1; I.mkVTerm e2]
         | Syntax.J(t1,(x2,x3,x4,t5),(x6,e7),e8,e9,e10) ->
             let e7_as_lambda =
-              (Syntax.Lambda(x6, t1,
-                             Equal.type_of (Context.add_var x6 t1 ctx) e7,
-                             e7), Position.nowhere)  in
+              (Syntax.mkLambda x6 t1
+                               (Equal.type_of (Context.add_var x6 t1 ctx) e7)
+                               e7)  in
             let t5_as_3_pis =
-              (Syntax.Prod(x2, t1,
-                 (Syntax.Prod(x3, Syntax.shift_ty 1 t1,
-                    (Syntax.Prod(x3, (Syntax.Paths(Syntax.shift_ty 2 t1,
-                                                (Syntax.Var 1, Position.nowhere),
-                                                (Syntax.Var 0, Position.nowhere)), Position.nowhere),
-                               t5), Position.nowhere)), Position.nowhere)), Position.nowhere)  in
+              (Syntax.mkProd x2 t1
+                 (Syntax.mkProd x3 (Syntax.shift_ty 1 t1)
+                    (Syntax.mkProd x4 (Syntax.mkPaths (Syntax.shift_ty 2 t1)
+                                                      (Syntax.mkVar 1)
+                                                      (Syntax.mkVar 0))
+                               t5)))  in
 
             [mkstr "J"; I.mkVType t1;
              I.mkVFakeTypeFamily 3 t5_as_3_pis;
@@ -413,21 +416,21 @@ and eval_implode ctx env ((v',loc) as v) =
         match s,vs with
         | "Var", [I.VConst (I.Int i), iloc] ->
             if (i >= 0 && i < List.length (Context.names ctx)) then
-              I.mkVTerm ~loc (Syntax.Var i, iloc)
+              I.mkVTerm ~loc (Syntax.mkVar ~loc:iloc i)
             else
               Error.runtime ~loc "implode: invalid variable"
 
         | "NameUniverse", [I.VConst(I.String s), sloc] ->
           begin
             match Universe.of_string s with
-            | Some u -> I.mkVTerm (Syntax.NameUniverse u, sloc)
+            | Some u -> I.mkVTerm (Syntax.mkNameUniverse ~loc:sloc u)
             | None -> Error.runtime ~loc "'%s' is not a valid universe" s
           end
 
         | "Universe", [I.VConst(I.String s), sloc] ->
           begin
             match Universe.of_string s with
-            | Some u -> I.mkVType (Syntax.Universe u, sloc)
+            | Some u -> I.mkVType (Syntax.mkUniverse ~loc:sloc u)
             | None -> Error.runtime ~loc "'%s' is not a valid universe" s
           end
 
@@ -715,7 +718,7 @@ and run ctx env  (comp, loc) =
                             let ctx' = extend_context_with_witnesses ctx ws in
                             if Equal.equal_ty ctx' t t2 then
                               I.RVal (I.mkVTerm (wrap_syntax_with_witnesses ctx
-                                                    (Syntax.App((x,t,u),b1,b2), loc) ws))
+                                                    (Syntax.mkApp ~loc x t u b1 b2) ws))
                             else
                               Error.runtime ~loc "Witnesses weren't enough to prove equivalence"
                         | v' ->  Error.runtime ~loc "Bad mkApp. Why is@ %t@ == %t ? (%s)"
@@ -802,7 +805,7 @@ and run ctx env  (comp, loc) =
     | I.MkVar i ->
         let vars = depth ctx  in
         if i < vars then
-          I.RVal (I.mkVTerm ~loc (Syntax.Var i, loc))
+          I.RVal (I.mkVTerm ~loc (Syntax.mkVar ~loc i))
         else
           Error.runtime ~loc "Index is %d but context has length %d" i vars
 
@@ -815,7 +818,7 @@ and run ctx env  (comp, loc) =
                    begin
                      let t = Equal.type_of ctx b  in
                      match Equal.as_universe ctx t with
-                     | Some alpha -> Syntax.El(alpha, b), snd e2
+                     | Some alpha -> Syntax.mkEl ~loc:(snd e2) alpha b
                      | None -> Error.runtime ~loc
                                 "Bad type annotation in lambda.@ Why does %t belong to a universe?"
                                 (print_term ctx b)
@@ -870,7 +873,7 @@ and run ctx env  (comp, loc) =
                         if Equal.equal_ty ctx' u t then
                           I.RVal
                                (I.mkVTerm (wrap_syntax_with_witnesses ctx
-                                             (Syntax.Ascribe(b,t), Position.nowhere) ws ))
+                                             (Syntax.mkAscribe b t) ws ))
                         else
                           Error.runtime ~loc "Witnesses weren't enough to prove equivalence"
                     | _ ->

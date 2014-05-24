@@ -175,7 +175,7 @@ and equal_ty (left_ty,_) (right_ty,_) =
    scope we are in, and provides that count to [ftrans] along with the
    recursively transformed term.
 *)
-let rec transform ftrans bvs (term', loc) =
+let rec transform ftrans bvs ((term', loc) as term) =
   (* Shorthand for recursive calls *)
   let recurse    = transform ftrans bvs in
   let recurse_ty = transform_ty ftrans bvs in
@@ -185,77 +185,85 @@ let rec transform ftrans bvs (term', loc) =
   let recurse_ty_in_binders n = transform_ty ftrans (bvs+n) in
 
   ftrans bvs
-    ((match term' with
+    (match term' with
 
-      | Var _index -> term'
+      | Var _index -> term
 
       | Equation(term1, ty2, term3) ->
-          Equation(recurse term1, recurse_ty ty2, recurse term3)
+          mkEquation ~loc (recurse term1) (recurse_ty ty2) (recurse term3)
 
       | Rewrite(term1, ty2, term3) ->
-          Rewrite(recurse term1, recurse_ty ty2, recurse term3)
+          mkRewrite ~loc (recurse term1) (recurse_ty ty2) (recurse term3)
 
-      | Ascribe(term1, ty2)    -> Ascribe(recurse term1, recurse_ty ty2)
+      | Ascribe(term1, ty2)    ->
+          mkAscribe ~loc (recurse term1) (recurse_ty ty2)
 
       | Lambda(name, ty1, ty2, term1) ->
-          Lambda(name, recurse_ty ty1,
-                   recurse_ty_in_binders 1 ty2, recurse_in_binders 1 term1)
+          mkLambda ~loc name (recurse_ty ty1)
+                   (recurse_ty_in_binders 1 ty2) (recurse_in_binders 1 term1)
 
       | App((name, ty1, ty2), term1, term2) ->
+          mkApp ~loc name (recurse_ty ty1) (recurse_ty_in_binders 1 ty2)
+                (recurse term1) (recurse term2)
 
-          App((name, recurse_ty ty1, recurse_ty_in_binders 1 ty2),
-                recurse term1, recurse term2)
+      | UnitTerm -> mkUnitTerm ~loc ()
 
-      | UnitTerm -> UnitTerm
-
-      | Idpath(ty1, term2) -> Idpath(recurse_ty ty1, recurse term2)
+      | Idpath(ty1, term2) ->
+          mkIdpath ~loc (recurse_ty ty1) (recurse term2)
 
       | J(ty1, (name1, name2, name3, ty2), (name4, term2), term3, term4, term5) ->
-          J(recurse_ty ty1,
-              (name1, name2, name3, recurse_ty_in_binders 3 ty2),
-              (name4, recurse_in_binders 1 term2),
-              recurse term3, recurse term4, recurse term5)
+          mkJ ~loc (recurse_ty ty1)
+              (name1, name2, name3, recurse_ty_in_binders 3 ty2)
+              (name4, recurse_in_binders 1 term2)
+              (recurse term3) (recurse term4) (recurse term5)
 
-      | Refl(ty1, term2)  -> Refl (recurse_ty ty1, recurse term2)
+      | Refl(ty1, term2)  ->
+          mkRefl ~loc (recurse_ty ty1) (recurse term2)
 
-      | Coerce(universe1, universe2, term1) -> Coerce(universe1, universe2, recurse term1)
+      | Coerce(universe1, universe2, term1) ->
+          mkCoerce ~loc universe1 universe2 (recurse term1)
 
-      | NameUnit -> NameUnit
+      | NameUnit ->
+          mkNameUnit ~loc ()
 
       | NameProd(universe1, universe2, name, term1, term2) ->
-          NameProd(universe1, universe2, name, recurse term1, recurse_in_binders 1 term2)
+          mkNameProd ~loc universe1 universe2 name
+                     (recurse term1) (recurse_in_binders 1 term2)
 
-      | NameUniverse universe1 -> NameUniverse universe1
+      | NameUniverse universe1 ->
+          mkNameUniverse ~loc universe1
 
       | NamePaths(universe1, term1, term2, term3) ->
-          NamePaths(universe1, recurse term1, recurse term2, recurse term3)
+          mkNamePaths ~loc universe1 (recurse term1) (recurse term2) (recurse term3)
 
       | NameId(universe1, term1, term2, term3) ->
-          NameId(universe1, recurse term1, recurse term2, recurse term3)),
-    loc)
+          mkNameId ~loc universe1 (recurse term1) (recurse term2) (recurse term3)
+    )
 
 and transform_ty ftrans bvs (ty', loc) =
   let recurse    = transform    ftrans bvs in
   let recurse_ty = transform_ty ftrans bvs in
 
   let recurse_ty_in_binders n = transform_ty ftrans (bvs+n)  in
-  (match ty' with
+  match ty' with
 
-  | Universe universe1 -> Universe universe1
+  | Universe universe1 ->
+      mkUniverse ~loc universe1
 
-  | El(universe1, term1) -> El (universe1, recurse term1)
+  | El(universe1, term1) ->
+      mkEl ~loc universe1 (recurse term1)
 
-  | Unit -> Unit
+  | Unit ->
+      mkUnit ~loc ()
 
   | Prod(name, ty1, ty2) ->
-      Prod(name, recurse_ty ty1, recurse_ty_in_binders 1 ty2)
+      mkProd ~loc name (recurse_ty ty1) (recurse_ty_in_binders 1 ty2)
 
   | Paths(ty1, term1, term2) ->
-      Paths(recurse_ty ty1, recurse term1, recurse term2)
+      mkPaths ~loc (recurse_ty ty1) (recurse term1) (recurse term2)
 
   | Id(ty1, term1, term2) ->
-      Id(recurse_ty ty1, recurse term1, recurse term2)),
-  loc
+      mkId ~loc (recurse_ty ty1) (recurse term1) (recurse term2)
 
 (** [shift delta e] is a transformation that adds [delta] to all
     free variable indices in [e].
@@ -274,7 +282,7 @@ let ftrans_shift ?exn delta bvs = function
             | None -> Error.impossible ~loc "shifting produced a negative index"
             | Some e -> raise e
           end ;
-          (Var (index + delta), loc)
+          mkVar ~loc (index + delta)
         end
 
   | nonvar -> nonvar
@@ -342,7 +350,7 @@ let betas_ty tBody eArgs =
     betas 1 tBody eArgs
 
 let make_arrow ?(loc=Position.nowhere) dom cod =
-   Prod("_", dom, shift_ty 1 cod), loc
+   mkProd ~loc "_" dom (shift_ty 1 cod)
 
 (**
   Suppose we have [G, x_1:t_1, ..., x_n:t_n |- exp : ...] and the inhabitants
@@ -388,25 +396,23 @@ let weaken_ty new_var_pos ty =
 
 let rec name_of (ty', loc) =
 
-  (* Compute the name term and the universe, without the outermost loc *)
-  let answer' =
-
-    match ty' with
+  (* Compute the name term and the universe *)
+  match ty' with
 
     | Universe alpha ->
-        Some(NameUniverse alpha, Universe.succ alpha)
+        Some(mkNameUniverse ~loc alpha, Universe.succ alpha)
 
-    | El (alpha, (e', _)) ->
+    | El (alpha, e') ->
         Some(e', alpha)
 
     | Unit ->
-        Some (NameUnit, Universe.zero)
+        Some (mkNameUnit ~loc (), Universe.zero)
 
     | Prod(x,t,u) ->
         begin
           match name_of t, name_of u with
           | Some (name_t, alpha), Some (name_u, beta) ->
-              Some( NameProd(alpha, beta, x, name_t, name_u),
+              Some( mkNameProd ~loc alpha beta x name_t name_u,
                     Universe.max alpha beta )
           | _ -> None
         end
@@ -415,7 +421,7 @@ let rec name_of (ty', loc) =
         begin
           match name_of t with
           | Some (name_t, alpha) ->
-              Some (NamePaths(alpha, name_t, e2, e3), alpha)
+              Some (mkNamePaths ~loc alpha name_t e2 e3, alpha)
           | None -> None
         end
 
@@ -423,15 +429,9 @@ let rec name_of (ty', loc) =
         begin
           match name_of t with
           | Some (name_t, alpha) ->
-              Some (NameId(alpha, name_t, e2, e3), alpha)
+              Some (mkNameId ~loc alpha name_t e2 e3, alpha)
           | None -> None
         end
-
-  in
-     (* Reattach the location, if we succeeded *)
-     match answer' with
-     | None -> None
-     | Some (name', universe) -> Some ((name', loc), universe)
 
 
 

@@ -108,7 +108,7 @@ let rec exec_cmd interactive (ctx,env) (d, loc) =
                   | InputTT.VTerm b, _ ->
                       begin
                         match Equal.as_universe ctx (Equal.type_of ctx b) with
-                        | Some alpha -> (Syntax.El(alpha, b), loc)
+                        | Some alpha -> Syntax.mkEl ~loc alpha b
                         | None -> Error.runtime ~loc
                              "Cannot see why classifier %s of %s belongs to a universe"
                              (InputTT.string_of_value ctx v)
