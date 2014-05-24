@@ -107,7 +107,7 @@ let rec exec_cmd interactive (ctx,env) (d, loc) =
                   | InputTT.VType t, _ -> t
                   | InputTT.VTerm b, _ ->
                       begin
-                        match Equal.as_universe ctx (Typing.type_of ctx b) with
+                        match Equal.as_universe ctx (Equal.type_of ctx b) with
                         | Some alpha -> (Syntax.El(alpha, b), loc)
                         | None -> Error.runtime ~loc
                              "Cannot see why classifier %s of %s belongs to a universe"
@@ -152,7 +152,7 @@ let rec exec_cmd interactive (ctx,env) (d, loc) =
                 match fst v with
                 | InputTT.VTerm b ->
                     let b = Syntax.simplify b  in
-                    let t = Typing.type_of ctx b  in
+                    let t = Equal.type_of ctx b  in
                     let t = Syntax.simplify_ty t  in
                     let ctx = Ctx.add_def x t b ctx  in
                     ctx, env
@@ -198,7 +198,7 @@ let toplevel env =
     let env = ref env in
     while true do
       try
-        let cmd = Lexer.read_toplevel (parse ParserTT.commandline) () in
+        let cmd = LexerTT.read_toplevel (parse ParserTT.commandline) () in
         env := exec_cmd true !env cmd
       with
         | Error.Error err -> Print.error err
