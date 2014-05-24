@@ -75,11 +75,11 @@ let for_J t x y p z ctx =
   let ctx_xyp =
     add_var
       p
-      (Syntax.Paths
-         (Syntax.shift_ty 2 t,  (* Weaken twice for x and y *)
-          (Syntax.Var 0 (* x *), Position.nowhere),
-          (Syntax.Var 1 (* y *), Position.nowhere)),
-       Position.nowhere) ctx_xy
+      (Syntax.mkPaths
+         (Syntax.shift_ty 2 t)  (* Weaken twice for x and y *)
+          (Syntax.mkVar 0)  (* x *)
+          (Syntax.mkVar 1)) (* y *)
+      ctx_xy
   and ctx_z = add_var z t ctx
   in
     ctx_xyp, ctx_z

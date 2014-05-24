@@ -33,7 +33,7 @@ let rec of_ty' k l ((t', loc) as t) =
     | Syntax.El (alpha, e) ->
       let e = of_term' k l e in
       begin match e with
-        | Term e -> Ty (Syntax.El (alpha, e), loc)
+        | Term e -> Ty (Syntax.mkEl ~loc alpha e)
         | _ -> El (alpha, e)
       end
 
@@ -45,7 +45,7 @@ let rec of_ty' k l ((t', loc) as t) =
       and t2 = of_ty' k (l+1) t2
       in
         begin match t1, t2 with
-          | Ty t1, Ty t2 -> Ty (Syntax.Prod (x, t1, t2), loc)
+          | Ty t1, Ty t2 -> Ty (Syntax.mkProd ~loc x t1 t2)
           | _ -> Prod (x, t1, t2)
         end
 
@@ -55,7 +55,7 @@ let rec of_ty' k l ((t', loc) as t) =
       and e2 = of_term' k l e2
       in
         begin match t, e1, e2 with
-          | Ty t, Term e1, Term e2 -> Ty (Syntax.Paths (t, e1, e2), loc)
+          | Ty t, Term e1, Term e2 -> Ty (Syntax.mkPaths ~loc t e1 e2)
           | _ -> Paths (t, e1, e2)
         end
 
@@ -65,7 +65,7 @@ let rec of_ty' k l ((t', loc) as t) =
       and e2 = of_term' k l e2
       in
         begin match t, e1, e2 with
-          | Ty t, Term e1, Term e2 -> Ty (Syntax.Id (t, e1, e2), loc)
+          | Ty t, Term e1, Term e2 -> Ty (Syntax.mkId ~loc t e1 e2)
           | _ -> Id (t, e1, e2)
         end
 
@@ -73,9 +73,9 @@ and of_term' k l ((e', loc) as e) =
   match e' with
 
     | Syntax.Var j ->
-      if j < l then Term (Syntax.Var j, loc) (* bound variable *)
+      if j < l then Term (Syntax.mkVar ~loc j) (* bound variable *)
       else if j < k + l then PVar (j - l) (* pattern variable *)
-      else Term (Syntax.Var (j - k), loc) (* other variable *)
+      else Term (Syntax.mkVar ~loc (j - k)) (* other variable *)
 
     | Syntax.Equation (_, _, e2) ->
       of_term' k l e
@@ -92,7 +92,7 @@ and of_term' k l ((e', loc) as e) =
       and e = of_term' k l e
       in
         begin match t1, t2, e with
-          | Ty t1, Ty t2, Term e -> Term (Syntax.Lambda (x, t1, t2, e), loc)
+          | Ty t1, Ty t2, Term e -> Term (Syntax.mkLambda ~loc x t1 t2 e)
           | _ -> Lambda (x, t1, t2, e)
         end
 
@@ -104,7 +104,7 @@ and of_term' k l ((e', loc) as e) =
       in
         begin match t1, t2, e1, e2 with
           | Ty t1, Ty t2, Term e1, Term e2 ->
-            Term (Syntax.App ((x, t1, t2), e1, e2), loc)
+            Term (Syntax.mkApp ~loc x t1 t2 e1 e2)
           | _ -> App ((x, t1, t2), e1, e2)
         end
 
@@ -116,7 +116,7 @@ and of_term' k l ((e', loc) as e) =
       and e = of_term' k l e
       in
         begin match t, e with
-          | Ty t, Term e -> Term (Syntax.Idpath (t, e), loc)
+          | Ty t, Term e -> Term (Syntax.mkIdpath ~loc t e)
           | _ -> Idpath (t, e)
         end
 
@@ -130,7 +130,7 @@ and of_term' k l ((e', loc) as e) =
       in
         begin match t, u, e1, e2, e3, e4 with
           | Ty t, Ty u, Term e1, Term e2, Term e3, Term e4 ->
-            Term (Syntax.J (t, (x,y,p,u), (z,e1), e2, e3, e4), loc)
+            Term (Syntax.mkJ ~loc t (x,y,p,u) (z,e1) e2 e3 e4)
           | _ -> J (t, (x,y,p,u), (z,e1), e2, e3, e4)
         end
 
@@ -139,7 +139,7 @@ and of_term' k l ((e', loc) as e) =
       and e = of_term' k l e
       in
         begin match t, e with
-          | Ty t, Term e -> Term (Syntax.Idpath (t, e), loc)
+          | Ty t, Term e -> Term (Syntax.mkRefl ~loc t e)
           | _ -> Idpath (t, e)
         end
 
@@ -147,7 +147,7 @@ and of_term' k l ((e', loc) as e) =
       let e = of_term' k l e
       in
         begin match e with
-          | Term e -> Term (Syntax.Coerce (alpha, beta, e), loc)
+          | Term e -> Term (Syntax.mkCoerce ~loc alpha beta e)
           | _ -> Coerce (alpha, beta, e)
         end
 
@@ -159,7 +159,7 @@ and of_term' k l ((e', loc) as e) =
       and e2 = of_term' k (l+1) e2
       in
         begin match e1, e2 with
-          | Term e1, Term e2 -> Term (Syntax.NameProd (alpha, beta, x, e1, e2), loc)
+          | Term e1, Term e2 -> Term (Syntax.mkNameProd ~loc alpha beta x e1 e2)
           | _ -> NameProd (alpha, beta, x, e1, e2)
         end
 
@@ -172,7 +172,7 @@ and of_term' k l ((e', loc) as e) =
       and e3 = of_term' k l e3
       in
         begin match e1, e2, e3 with
-          | Term e1, Term e2, Term e3 -> Term (Syntax.NamePaths (alpha, e1, e2, e3), loc)
+          | Term e1, Term e2, Term e3 -> Term (Syntax.mkNamePaths ~loc alpha e1 e2 e3)
           | _ -> NamePaths (alpha, e1, e2, e3)
         end
 
@@ -182,7 +182,7 @@ and of_term' k l ((e', loc) as e) =
       and e3 = of_term' k l e3
       in
         begin match e1, e2, e3 with
-          | Term e1, Term e2, Term e3 -> Term (Syntax.NameId (alpha, e1, e2, e3), loc)
+          | Term e1, Term e2, Term e3 -> Term (Syntax.mkNameId ~loc alpha e1 e2 e3)
           | _ -> NameId (alpha, e1, e2, e3)
         end
 
@@ -199,7 +199,7 @@ let rec subst_ty inst k = function
   | El (alpha, e) ->
     let e = subst_term inst k e in
       begin match e with
-        | Term e -> Ty (Syntax.El (alpha, e), Position.nowhere)
+        | Term e -> Ty (Syntax.mkEl alpha e)
         | _ -> El (alpha, e)
       end
 
@@ -208,7 +208,7 @@ let rec subst_ty inst k = function
     and t2 = subst_ty inst (k+1) t2
     in
       begin match t1, t2 with
-        | Ty t1, Ty t2 -> Ty (Syntax.Prod (x, t1, t2), Position.nowhere)
+        | Ty t1, Ty t2 -> Ty (Syntax.mkProd x t1 t2)
         | _ -> Prod (x, t1, t2)
       end
 
@@ -218,7 +218,7 @@ let rec subst_ty inst k = function
     and e2 = subst_term inst k e2
     in
       begin match t, e1, e2 with
-        | Ty t, Term e1, Term e2 -> Ty (Syntax.Paths (t, e1, e2), Position.nowhere)
+        | Ty t, Term e1, Term e2 -> Ty (Syntax.mkPaths t e1 e2)
         | _ -> Paths (t, e1, e2)
       end
 
@@ -228,7 +228,7 @@ let rec subst_ty inst k = function
     and e2 = subst_term inst k e2
     in
       begin match t, e1, e2 with
-        | Ty t, Term e1, Term e2 -> Ty (Syntax.Id (t, e1, e2), Position.nowhere)
+        | Ty t, Term e1, Term e2 -> Ty (Syntax.mkId t e1 e2)
         | _ -> Id (t, e1, e2)
       end
 
@@ -250,7 +250,7 @@ and subst_term inst k = function
     and e = subst_term inst (k+1) e
     in
       begin match t1, t2, e with
-        | Ty t1, Ty t2, Term e -> Term (Syntax.Lambda (x, t1, t2, e), Position.nowhere)
+        | Ty t1, Ty t2, Term e -> Term (Syntax.mkLambda x t1 t2 e)
         | _ -> Lambda (x, t1, t2, e)
       end
 
@@ -262,7 +262,7 @@ and subst_term inst k = function
     in
       begin match t1, t2, e1, e2 with
         | Ty t1, Ty t2, Term e1, Term e2 ->
-          Term (Syntax.App ((x, t1, t2), e1, e2), Position.nowhere)
+          Term (Syntax.mkApp x t1 t2 e1 e2)
         | _ -> App ((x, t1, t2), e1, e2)
       end
 
@@ -271,7 +271,7 @@ and subst_term inst k = function
     and e = subst_term inst k e
     in
       begin match t, e with
-        | Ty t, Term e -> Term (Syntax.Idpath (t, e), Position.nowhere)
+        | Ty t, Term e -> Term (Syntax.mkIdpath t e)
         | _ -> Idpath (t, e)
       end
 
@@ -285,7 +285,7 @@ and subst_term inst k = function
     in
       begin match t, u, e1, e2, e3, e4 with
         | Ty t, Ty u, Term e1, Term e2, Term e3, Term e4 ->
-          Term (Syntax.J (t, (x, y, p, u), (z, e1), e2, e3, e4), Position.nowhere)
+          Term (Syntax.mkJ t (x, y, p, u) (z, e1) e2 e3 e4)
         | _ -> J (t, (x, y, p, u), (z, e1), e2, e3, e4)
       end
 
@@ -294,7 +294,7 @@ and subst_term inst k = function
     and e = subst_term inst k e
     in
       begin match t, e with
-        | Ty t, Term e -> Term (Syntax.Refl (t, e), Position.nowhere)
+        | Ty t, Term e -> Term (Syntax.mkRefl t e)
         | _ -> Refl (t, e)
       end
 
@@ -302,7 +302,7 @@ and subst_term inst k = function
     let e = subst_term inst k e
     in
       begin match e with
-        | Term e -> Term (Syntax.Coerce (alpha, beta, e), Position.nowhere)
+        | Term e -> Term (Syntax.mkCoerce alpha beta e)
         | _ -> Coerce (alpha, beta, e)
       end
 
@@ -312,7 +312,7 @@ and subst_term inst k = function
     in
       begin match e1, e2 with
         | Term e1, Term e2 ->
-          Term (Syntax.NameProd (alpha, beta, x, e1, e2), Position.nowhere)
+          Term (Syntax.mkNameProd alpha beta x e1 e2)
         | _ -> NameProd (alpha, beta, x, e1, e2)
       end
 
@@ -323,7 +323,7 @@ and subst_term inst k = function
     in
       begin match e1, e2, e3 with
         | Term e1, Term e2, Term e3 ->
-          Term (Syntax.NamePaths (alpha, e1, e2, e3), Position.nowhere)
+          Term (Syntax.mkNamePaths alpha e1 e2 e3)
         | _ -> NamePaths (alpha, e1, e2, e3)
       end
 
@@ -334,7 +334,7 @@ and subst_term inst k = function
     in
       begin match e1, e2, e3 with
         | Term e1, Term e2, Term e3 ->
-          Term (Syntax.NameId (alpha, e1, e2, e3), Position.nowhere)
+          Term (Syntax.mkNameId alpha e1 e2 e3)
         | _ -> NameId (alpha, e1, e2, e3)
       end
 

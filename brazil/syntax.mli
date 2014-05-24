@@ -8,7 +8,7 @@ type variable = Common.debruijn
 type universe = Universe.t
 
 type ty = ty' * Position.t
-and ty' =
+and ty' = private
   | Universe of universe
   | El of universe * term
   | Unit
@@ -17,7 +17,7 @@ and ty' =
   | Id of ty * term * term
 
 and term = term' * Position.t
-and term' =
+and term' = private
   | Var of variable
   | Equation of term * ty * term
   | Rewrite of term * ty * term
