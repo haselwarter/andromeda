@@ -179,7 +179,14 @@ and term ?max_level xs (e,_) ppf =
       | Syntax.Lambda (x, t, u, e) ->
         print ~at_level:3 "%t" (lambda xs x t u e)
 
-      | Syntax.App ((x, t, u), e1, e2) ->
+      | Syntax.App (None, e1, e2) ->
+        print ~at_level:1 "%t@,%t@ %t"
+          (term ~max_level:1 xs e1)
+          (annot ~prefix:" @"
+             (fun ppf -> print' ~max_level:4 ppf "-"))
+          (term ~max_level:0 xs e2)
+
+      | Syntax.App (Some (x, t, u), e1, e2) ->
         print ~at_level:1 "%t@,%t@ %t"
           (term ~max_level:1 xs e1)
           (annot ~prefix:" @"

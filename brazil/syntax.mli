@@ -23,7 +23,7 @@ and term' = private
   | Rewrite of term * ty * term
   | Ascribe of term * ty
   | Lambda of name * ty * ty * term
-  | App of (name * ty * ty) * term * term
+  | App of (name * ty * ty) option * term * term
   | UnitTerm
   | Idpath of ty * term
   | J of ty * (name * name * name * ty) * (name * term) * term * term * term
@@ -55,6 +55,7 @@ val mkRewrite : ?loc:Position.t -> term -> ty -> term -> term
 val mkAscribe : ?loc:Position.t -> term -> ty -> term
 val mkLambda : ?loc:Position.t -> name -> ty -> ty -> term -> term
 val mkApp : ?loc:Position.t -> name -> ty -> ty -> term -> term -> term
+val mkApp_unsafe : ?loc:Position.t -> (name * ty * ty) option -> term -> term -> term
 val mkUnitTerm : ?loc:Position.t -> unit -> term
 val mkIdpath : ?loc:Position.t -> ty -> term -> term
 val mkJ : ?loc:Position.t -> ty -> (name*name*name*ty) -> (name*term) -> term -> term -> term -> term
@@ -163,3 +164,5 @@ val simplify : term -> term
 
 (** Simplify a type *)
 val simplify_ty : ty -> ty
+
+val transform: (int -> term -> term) -> int -> term -> term
