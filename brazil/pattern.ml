@@ -15,7 +15,7 @@ and term =
   | Term of Syntax.term
   | PVar of int
   | Lambda of name * ty * ty * term
-  | App of (name * ty * ty) * term * term
+  | App of (name * ty * ty) option * term * term
   | Idpath of ty * term
   | J of ty * (name * name * name * ty) * (name * term) * term * term * term
   | Refl of ty * term
@@ -105,11 +105,19 @@ and of_term' k l ((e', loc) as e) =
         begin match t1, t2, e1, e2 with
           | Ty t1, Ty t2, Term e1, Term e2 ->
             Term (Syntax.mkApp ~loc x t1 t2 e1 e2)
-          | _ -> App ((x, t1, t2), e1, e2)
+          | _ -> App (Some (x, t1, t2), e1, e2)
         end
 
-    | Syntax.App _ ->
-        Error.typing "Pattern.of_term' got an unannotated application"
+    | Syntax.App (None, e1, e2) ->
+      let e1 = of_term' k l  e1
+      and e2 = of_term' k l e2
+      in
+        begin match e1, e2 with
+          | Term e1, Term e2 ->
+            Term (Syntax.mkApp_unsafe ~loc None e1 e2)
+          | _ -> App (None, e1, e2)
+        end
+        (*Error.typing "Pattern.of_term' got an unannotated application"*)
 
     | Syntax.UnitTerm ->
       Term e
@@ -257,7 +265,7 @@ and subst_term inst k = function
         | _ -> Lambda (x, t1, t2, e)
       end
 
-  | App ((x, t1, t2), e1, e2) ->
+  | App (Some (x, t1, t2), e1, e2) ->
     let t1 = subst_ty inst k t1
     and t2 = subst_ty inst (k+1) t2
     and e1 = subst_term inst k e1
@@ -266,7 +274,17 @@ and subst_term inst k = function
       begin match t1, t2, e1, e2 with
         | Ty t1, Ty t2, Term e1, Term e2 ->
           Term (Syntax.mkApp x t1 t2 e1 e2)
-        | _ -> App ((x, t1, t2), e1, e2)
+        | _ -> App (Some (x, t1, t2), e1, e2)
+      end
+
+  | App (None, e1, e2) ->
+    let e1 = subst_term inst k e1
+    and e2 = subst_term inst k e2
+    in
+      begin match e1, e2 with
+        | Term e1, Term e2 ->
+          Term (Syntax.mkApp_unsafe None e1 e2)
+        | _ -> App (None, e1, e2)
       end
 
   | Idpath (t, e) ->
@@ -386,13 +404,19 @@ and shift k l = function
     in
       Lambda (x, t1, t2, e)
 
-  | App ((x, t1, t2), e1, e2) ->
+  | App (Some (x, t1, t2), e1, e2) ->
     let t1 = shift_ty k l t1
     and t2 = shift_ty k (l+1) t2
     and e1 = shift k l e1
     and e2 = shift k l e2
     in
-      App ((x, t1, t2), e1, e2)
+      App (Some (x, t1, t2), e1, e2)
+
+  | App (None, e1, e2) ->
+    let e1 = shift k l e1
+    and e2 = shift k l e2
+    in
+      App (None, e1, e2)
 
   | Idpath (t, e) ->
     let t = shift_ty k l t

@@ -11,7 +11,7 @@ and term =
   | Term of Syntax.term
   | PVar of int
   | Lambda of name * ty * ty * term
-  | App of (name * ty * ty) * term * term
+  | App of (name * ty * ty) option * term * term
   | Idpath of ty * term
   | J of ty * (name * name * name * ty) * (name * term) * term * term * term
   | Refl of ty * term

@@ -266,8 +266,7 @@ let rec transform ftrans bvs ((term', loc) as term) =
                 (recurse term1) (recurse term2)
 
       | App(None, term1, term2) ->
-          failwith "XXX transform";
-          (*mkApp_unsafe ~loc None (recurse term1) (recurse term2)*)
+          mkApp_unsafe ~loc None (recurse term1) (recurse term2)
 
       | UnitTerm -> mkUnitTerm ~loc ()
 

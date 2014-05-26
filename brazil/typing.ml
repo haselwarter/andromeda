@@ -74,7 +74,8 @@ let rec syn_term ctx ((term', loc) as term) =
         match Equal.as_prod ctx t1 with
           | Some (x, t, u) ->
             let e2 = chk_term ctx e2 t in
-              Syntax.mkApp ~loc x t u e1 e2,
+              Syntax.mkApp_unsafe ~loc None e1 e2,
+              (*Syntax.mkApp ~loc x t u e1 e2,*)
               Syntax.beta_ty u e2
           | None ->
             Error.typing ~loc:(snd e1)

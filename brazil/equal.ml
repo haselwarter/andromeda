@@ -95,31 +95,35 @@ and infer_app_annot caller loc ctx annot e1 _e2 =
     match annot with
     | Some triple -> triple
     | None ->
-        failwith "YYY: infer_app_annot";
-        (*
         begin
           let t1 = type_of ctx e1  in
           match as_prod' ~use_rws:false ctx t1  with
             | Some triple -> triple
             | None -> Error.typing ~loc
-                          "%s: Cannot reconstruct App annotation for term"
+                          "%s: Cannot reconstruct App annotation for term %t"
                           caller (print_term ctx e1)
         end
-  *)
   end
 
 
 and mkApp ?(loc=Position.nowhere) ctx x t1 t2 e1 e2 =
   begin
+          Syntax.mkApp x t1 t2 e1 e2
+    (*
     match as_prod' ~use_rws:false ctx (type_of ctx e1) with
     | None -> Syntax.mkApp x t1 t2 e1 e2
     | Some (_, t1', t2') ->
+        (*
         if equal_ty' ~use_eqs:false ~use_rws:false ctx t1 t1' &&
            equal_ty' ~use_eqs:false ~use_rws:false
                          (Context.add_var x t1 ctx) t2 t2'  then
+        *)
+        if Syntax.equal_ty t1 t1' &&
+        Syntax.equal_ty t2 t2' then
               Syntax.mkApp_unsafe None e1 e2
         else
           Syntax.mkApp x t1 t2 e1 e2
+          *)
   end
 
 (*************************)
@@ -224,7 +228,7 @@ and whnf ~use_rws ctx t ((e',loc) as e0) =
 
               (* norm-app-other *)
               | _ ->
-                Syntax.mkApp ~loc x u1 u2 e1 e2
+                mkApp ~loc ctx x u1 u2 e1 e2
         end
 
       | Syntax.J (t, (x,y,p,u), (z,e1), e2, e3, e4) ->
@@ -507,8 +511,8 @@ and equal_ext ~use_eqs ~use_rws ctx ((_, loc1) as e1) ((_, loc2) as e2) ((t', _)
         let u' = Syntax.weaken_ty 1 u  in  (* ctx, z, x |- u' type *)
         let z = Syntax.mkVar 0  in         (* ctx, z    |- z : ... *)
         equal_term ~use_eqs ~use_rws ctx'
-              (Syntax.mkApp ~loc:loc1 x t' u' e1' z) (* XXX Annotations might not elim *)
-              (Syntax.mkApp ~loc:loc2 x t' u' e2' z) (* XXX Annotations might not elim *)
+              (mkApp ~loc:loc1 ctx x t' u' e1' z) (* XXX Annotations might not elim *)
+              (mkApp ~loc:loc2 ctx x t' u' e2' z) (* XXX Annotations might not elim *)
               u
 
     (* chk-eq-ext-unit *)
@@ -686,15 +690,6 @@ and equal_whnf ~use_eqs ~use_rws ctx ((e1', loc1) as e1) ((e2', loc2) as e2) t =
             equal_term ctx e1'' e2'' t
   end
 
-and expand_all_annotations ctx =
-  let expand_transf bvs term =
-    match term with
-    | Syntax.App(None, e1, e2), loc ->
-        let x, t1, t2 = infer_app_annot "expand_all_annotations" loc ctx None e1 e2  in
-        Syntax.mkApp ~loc x t1 t2 e1 e2
-    | _ -> term
-  in
-    Syntax.transform expand_transf 0
 
 and as_hint' ~use_rws ctx (_, loc) t =
   let rec collect ctx' u =
@@ -709,8 +704,8 @@ and as_hint' ~use_rws ctx (_, loc) t =
   in
   let (k, t, e1, e2) = collect ctx t in
   let pt = Pattern.of_ty k t in
-  let pe1 = Pattern.of_term k (expand_all_annotations ctx e1) in
-  let pe2 = Pattern.of_term k (expand_all_annotations ctx e2) in
+  let pe1 = Pattern.of_term k e1 in
+  let pe2 = Pattern.of_term k e2 in
     (k, pt, pe1, pe2)
 
 (* Simple matching of a type pattern against a type. *)
@@ -814,7 +809,7 @@ and match_term ~magenta k inst l ctx p e t =
       | _ -> raise Mismatch
     end
 
-  | Pattern.App ((_, pt1, pt2), pe1, pe2) ->
+  | Pattern.App (Some (_, pt1, pt2), pe1, pe2) ->
     begin match fst e with
       | Syntax.App (annot, e1, e2) ->
         let x, t1, t2 = infer_app_annot "match_term/App" (snd e) ctx annot e1 e2  in
@@ -824,6 +819,19 @@ and match_term ~magenta k inst l ctx p e t =
         let inst = match_term inst l ctx pe1 e1 (Syntax.mkProd x t1 t2) in
         let inst = match_magenta inst l ctx pt1 t1 in
         let inst = match_magenta inst (l+1) (Context.add_var x t1 ctx) pt2 t2 in
+        let inst = match_term inst l ctx pe2 e2 t1 in
+          inst
+      | _ -> raise Mismatch
+    end
+
+  | Pattern.App (None, pe1, pe2) ->
+    begin match fst e with
+      | Syntax.App (annot, e1, e2) ->
+        let x, t1, t2 = infer_app_annot "match_term/App" (snd e) ctx annot e1 e2  in
+        (* We need to match the function part first, since in
+           the case of a spine it probably sets metavariables
+           (including type families) that occur in the type. *)
+        let inst = match_term inst l ctx pe1 e1 (Syntax.mkProd x t1 t2) in
         let inst = match_term inst l ctx pe2 e2 t1 in
           inst
       | _ -> raise Mismatch
@@ -1077,7 +1085,7 @@ and norm ctx ((e', loc) as e) : Syntax.term =
           (* norm-app-other *)
           | e1' ->
             let e2' = norm ctx e2 in
-            Syntax.mkApp ~loc x t1' t2' e1' e2'
+            mkApp ~loc ctx x t1' t2' e1' e2'
         end
 
     (* norm-idpath *)

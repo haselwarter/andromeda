@@ -166,3 +166,4 @@ val simplify : term -> term
 val simplify_ty : ty -> ty
 
 val transform: (int -> term -> term) -> int -> term -> term
+val transform_ty: (int -> term -> term) -> int -> ty -> ty
