@@ -25,7 +25,7 @@ and term' =
   | Rewrite of term * ty * term
   | Ascribe of term * ty
   | Lambda of name * ty * ty * term
-  | App of (name * ty * ty) * term * term
+  | App of (name * ty * ty) option * term * term
   | UnitTerm
   | Idpath of ty * term
   | J of ty * (name * name * name * ty) * (name * term) * term * term * term
@@ -51,7 +51,8 @@ let mkEquation ?(loc=Position.nowhere) e1 t e2 = Equation(e1,t,e2), loc
 let mkRewrite ?(loc=Position.nowhere) e1 t e2 = Rewrite(e1,t,e2), loc
 let mkAscribe ?(loc=Position.nowhere) e t = Ascribe(e,t), loc
 let mkLambda ?(loc=Position.nowhere) x t1 t2 e = Lambda(x,t1,t2,e), loc
-let mkApp ?(loc=Position.nowhere) x t1 t2 e1 e2 = App((x,t1,t2),e1,e2), loc
+let mkApp ?(loc=Position.nowhere) x t1 t2 e1 e2 = App(Some(x,t1,t2),e1,e2), loc
+let mkApp_unsafe ?(loc=Position.nowhere) annot e1 e2 = App(annot,e1,e2), loc
 let mkUnitTerm ?(loc=Position.nowhere) () = UnitTerm, loc
 let mkIdpath ?(loc=Position.nowhere) t e = Idpath(t,e), loc
 let mkJ ?(loc=Position.nowhere) a b c d e f = J(a,b,c,d,e,f), loc
@@ -134,10 +135,25 @@ let rec equal ((left',_) as left) ((right',_) as right) =
       && equal_ty ty2 ty5
       && equal term3 term6
 
-  | App((_,ty1,ty2),term3,term4), App((_,ty5,ty6),term7,term8) ->
+  (* If only one term is missing annotations, we do *not* consider them
+   * alpha-equivalent, because we are unlikely to be able to reconstruct the
+   * missing annotation (without a typing context), and given the examples
+   * above the annotation really does matter.
+   *
+   * If we are good about keeping applications unannotated unless they
+   * really need to be, this conservativism may not be an issue.
+   * If only one needs to be annotated, the terms aren't identical
+   * up to annotations anyway.
+   *)
+
+  | App(Some (_,ty1,ty2),term3,term4), App(Some (_,ty5,ty6),term7,term8) ->
          equal_ty ty1 ty5
       && equal_ty ty2 ty6
       && equal term3 term7
+      && equal term4 term8
+
+  | App(None,term3,term4), App(None,term7,term8) ->
+         equal term3 term7
       && equal term4 term8
 
   | UnitTerm, UnitTerm
@@ -211,6 +227,12 @@ and equal_ty (left_ty,_) (right_ty,_) =
    [transform] recursively maintains a count [bvs], the number of bound variables whose
    scope we are in, and provides that count to [ftrans] along with the
    recursively transformed term.
+
+   NOTE: We assume that any transformation preserves annotations on
+   applications. That's certainly true of substitution, shifting, and
+   (as long as it doesn't start throwing away type ascriptions)
+   the simplify function below.
+
 *)
 let rec transform ftrans bvs ((term', loc) as term) =
   (* Shorthand for recursive calls *)
@@ -239,9 +261,13 @@ let rec transform ftrans bvs ((term', loc) as term) =
           mkLambda ~loc name (recurse_ty ty1)
                    (recurse_ty_in_binders 1 ty2) (recurse_in_binders 1 term1)
 
-      | App((name, ty1, ty2), term1, term2) ->
+      | App(Some (name, ty1, ty2), term1, term2) ->
           mkApp ~loc name (recurse_ty ty1) (recurse_ty_in_binders 1 ty2)
                 (recurse term1) (recurse term2)
+
+      | App(None, term1, term2) ->
+          failwith "XXX transform";
+          (*mkApp_unsafe ~loc None (recurse term1) (recurse term2)*)
 
       | UnitTerm -> mkUnitTerm ~loc ()
 
@@ -484,7 +510,8 @@ let rec occurs k (e, _) =
     | Rewrite (e1, t, e2) -> occurs k e1 || occurs_ty k t || occurs k e2
     | Ascribe (e, t) -> occurs k e || occurs_ty k t
     | Lambda (_, t, u, e) -> occurs_ty k t || occurs_ty (k+1) u || occurs (k+1) e
-    | App ((_, t, u), e1, e2) -> occurs_ty k t || occurs_ty (k+1) u || occurs k e1 || occurs k e2
+    | App (Some (_, t, u), e1, e2) -> occurs_ty k t || occurs_ty (k+1) u || occurs k e1 || occurs k e2
+    | App (None, e1, e2) -> occurs k e1 || occurs k e2
     | UnitTerm -> false
     | Idpath (t, e) -> occurs_ty k t || occurs k e
     | J (t, (_, _, _, u), (_, e1), e2, e3, e4) ->
@@ -528,8 +555,11 @@ let rec occurrences k (e, _) =
     | Lambda (_, t, u, e) ->
       occurrences_ty k t + occurrences_ty (k+1) u + occurrences (k+1) e
 
-    | App ((_, t, u), e1, e2) ->
+    | App (Some (_, t, u), e1, e2) ->
       occurrences_ty k t + occurrences_ty (k+1) u + occurrences k e1 + occurrences k e2
+
+    | App (None, e1, e2) ->
+      occurrences k e1 + occurrences k e2
 
     | UnitTerm -> 0
 
@@ -587,20 +617,29 @@ let rec simple_term term =
   | Idpath (t,e)   -> simple_term e
   | _              -> false
 
+(* Note to future me: simplify cannot throw away type ascriptions, because that
+ * could change the obvious type_of the expression, and break the implicit
+ * annotations on applications.
+ *)
+
 let ftrans_simplify bvs term =
   match fst term with
-  | App((x1,ty2,ty3), (Lambda(x4,ty5,ty6,e7),_), e8) when equal_ty ty2 ty5
-                                                       && equal_ty ty3 ty6 ->
-      (* Reduce if the type annotations match literally,
-       * and either the argument is very simple or the
-       * lambda ignores its term or is linear.
-       *)
-      if simple_term e8 || (occurrences 0 e7 <= 1) then
-        beta e7 e8
-      else
-        term
+    (* Reduce if the type annotations match literally,
+     * and either the argument is very simple or the
+     * lambda ignores its term or is linear.
+     *)
+  | App(Some (x1,ty2,ty3), (Lambda(x4,ty5,ty6,e7),_), e8)
+              when    equal_ty ty2 ty5
+                   && equal_ty ty3 ty6
+                   && simple_term e8
+                   && occurrences 0 e7 <= 1  -> beta e7 e8
+
+  | App(None, (Lambda(_, _, _, e7), _), e8)
+              when    simple_term e8
+                   && occurrences 0 e7 <= 1  -> beta e7 e8
 
   | _ -> term
 
 let simplify = transform ftrans_simplify 0
 let simplify_ty = transform_ty ftrans_simplify 0
+

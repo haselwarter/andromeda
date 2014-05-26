@@ -54,15 +54,14 @@ let tentatively f =
 (* type_of *)
 (***********)
 
-let rec type_of ctx (exp, _) =
-  let loc = Position.nowhere in
+
+
+let rec type_of ctx (exp, loc) =
   match exp with
-  | Syntax.Var v -> Context.lookup_var v ctx
   | Syntax.Equation (_, _, body)
   | Syntax.Rewrite (_, _, body) -> type_of ctx body
   | Syntax.Ascribe (_, ty) -> ty
   | Syntax.Lambda (x, t1, t2, _) -> Syntax.mkProd ~loc x t1 t2
-  | Syntax.App ((_, _, t2), _, e2) -> Syntax.beta_ty t2 e2
   | Syntax.UnitTerm -> Syntax.mkUnit ~loc ()
   | Syntax.Idpath (t, e) -> Syntax.mkPaths ~loc t e e
   | Syntax.J (_, (_, _, _, u), _, e2, e3, e4) -> Syntax.strengthen_ty u [e2; e3; e4]
@@ -75,11 +74,59 @@ let rec type_of ctx (exp, _) =
   | Syntax.NameId    (alpha, _, _, _) -> Syntax.mkUniverse ~loc alpha
 
 
+  | Syntax.App (annot, e1, e2) ->
+      let (_, _, t2) = infer_app_annot "type_of" loc ctx annot e1 e2  in
+      Syntax.beta_ty t2 e2
+
+  | Syntax.Var v ->
+      begin
+        (* Trick to make sure that whnf can preserve type_of.
+         * WARNING: This will work as long as we don't allow variables without
+         * definitions to suddenly acquire definitions later on. Or at least,
+         * acquire a definition with an equivalent but distinct type_of. *)
+        (*
+        match Context.lookup_def v ctx with
+          | None    -> *) Context.lookup_var v ctx
+          (*| Some e' -> type_of ctx e'*)
+      end
+
+and infer_app_annot caller loc ctx annot e1 _e2 =
+  begin
+    match annot with
+    | Some triple -> triple
+    | None ->
+        failwith "YYY: infer_app_annot";
+        (*
+        begin
+          let t1 = type_of ctx e1  in
+          match as_prod' ~use_rws:false ctx t1  with
+            | Some triple -> triple
+            | None -> Error.typing ~loc
+                          "%s: Cannot reconstruct App annotation for term"
+                          caller (print_term ctx e1)
+        end
+  *)
+  end
+
+
+and mkApp ?(loc=Position.nowhere) ctx x t1 t2 e1 e2 =
+  begin
+    match as_prod' ~use_rws:false ctx (type_of ctx e1) with
+    | None -> Syntax.mkApp x t1 t2 e1 e2
+    | Some (_, t1', t2') ->
+        if equal_ty' ~use_eqs:false ~use_rws:false ctx t1 t1' &&
+           equal_ty' ~use_eqs:false ~use_rws:false
+                         (Context.add_var x t1 ctx) t2 t2'  then
+              Syntax.mkApp_unsafe None e1 e2
+        else
+          Syntax.mkApp x t1 t2 e1 e2
+  end
+
 (*************************)
 (* Weak-Head Normalizing *)
 (*************************)
 
-let rec whnf_ty ~use_rws ctx ((t',loc) as t) =
+and whnf_ty ~use_rws ctx ((t',loc) as t) =
   let whnf = whnf ~use_rws in
   let whnf_ty = whnf_ty ~use_rws in
   begin match t' with
@@ -161,14 +208,18 @@ and whnf ~use_rws ctx t ((e',loc) as e0) =
       | Syntax.Ascribe(e, _) ->
         whnf ctx t e
 
-      | Syntax.App ((x, u1, u2), e1, e2) ->
+      (* XXX: We should be able to do a little better in the case
+       * of an App with no annotation... *)
+
+      | Syntax.App (annot, e1, e2) ->
         begin
+          let x, u1, u2 = infer_app_annot "whnf/app" loc ctx annot e1 e2  in
           let e1 = whnf ctx (Syntax.mkProd ~loc x u1 u2) e1 in
             match fst e1 with
               (* norm-app-beta *)
               | Syntax.Lambda (y, t1, t2, e1')
                   when tentatively (fun () -> equal_ty' ctx u1 t1 &&
-                                         equal_ty' (Context.add_var x u1 ctx) u2 t2) ->
+                                              equal_ty' (Context.add_var x u1 ctx) u2 t2) ->
                 whnf ctx (Syntax.beta_ty u2 e2) (Syntax.beta e1' e2)
 
               (* norm-app-other *)
@@ -232,138 +283,6 @@ and whnf ~use_rws ctx t ((e',loc) as e0) =
       answer
     end
 
-(** new_match_term ctx pat e t
- *)
-(*
-and new_match_term ctx inst0 k pat pat_ty term ty  =
-  let tentative_equal_ty t1 t2 =
-    (*tentatively (fun () -> equal_ty' ~use_eqs:false ~use_rws:false ctx t1 t2)  in*)
-    tentatively (fun () -> Syntax.equal_ty t1 t2)  in
-
-  (* Match a the pattern (as a spine) against the term (as a spine)
-   *)
-  let match_spine (pat_head, pat_args) (term_head, term_args) =
-    if Pattern.eq_head tentative_equal_ty pat_head term_head then
-      if List.length pat_args = List.length term_args then
-        begin
-         (* The two spines have equal heads and the same length *)
-         (*Print.debug "Maybe %t@ will match %t"              *)
-         (*   (print_pattern ctx k pat) (print_term ctx term);*)
-
-         (* Loop throught the arguments and check that they correspond *)
-         let rec loop pat_args term_args inst =
-           match pat_args, term_args with
-           | [], [] -> inst
-
-           | ((_,pt1,_), p)::prest, ((_, t1,_), e)::erest ->
-               (* XXX
-                * Also need to check that the annotations on the applications
-                * are equal!!! *)
-
-               let inst =
-                 try
-                   (*Print.debug "Subpattern %t@ might match %t"   *)
-                   (*   (print_pattern ctx k p) (print_term ctx e);*)
-                   (* XXX This call to whnf gets rid of head beta redices in the term
-                    * arguments, but also expands head definitions. That might be
-                    * more than we want... *)
-                   let e =  whnf ~use_rws:false ctx t1 e  in
-                   new_match_term ctx inst k p pt1 e t1
-                 with
-                   | Mismatch ->
-                       (* Try to more aggressively weak-head normalize the term
-                          argument being matched, using other rewrites.
-                          Note that we are reducing a *subterm* of the term
-                          argument to new_match_term, so we're not going
-                          into an infinite loop, at least not immediately.
-                        *)
-                       let e = whnf ~use_rws:true ctx t1 e in
-                       new_match_term ctx inst k p pt1 e t1
-               in
-               let prest = Pattern.subst_pattern_args inst 0 prest  in
-               loop prest erest inst
-           | _, _ -> Error.impossible "match_spine/loop got lists with different lengths!"
-         in let inst = loop pat_args term_args inst0 in
-         inst
-       end
-      else
-        begin
-           (*Print.debug "Nope; lengths are different";*)
-           raise Mismatch
-        end
-    else
-      begin
-        (*Print.debug "Nope; heads don't match";*)
-        raise Mismatch
-      end   in
-
-  match pat, pat_ty with
-   | Pattern.PVar i, Pattern.Ty ty' ->
-       begin
-         if (tentatively
-               (fun () -> equal_ty' ~use_eqs:false ~use_rws:false ctx ty' ty)) then
-           begin
-             (* Substitutions should have gotten rid of this variable
-              * if it already had a definition. *)
-             assert (not (List.mem_assoc i inst0));
-             (i,term) :: inst0
-           end
-         else raise Mismatch
-       end
-
-   | Pattern.PVar _, _ ->
-       (* XXX: Unimplemented! *)
-       (*Print.debug "XXX new_match_term: PVar without a Ty";*)
-       raise Mismatch
-
-   | Pattern.Term pterm, Pattern.Ty ty' when
-       (* XXX Overly conservative? *)
-       (*tentatively (fun () ->                                              *)
-       (*   equal_ty' ~use_eqs:false ~use_rws:false ctx ty' ty               *)
-       (*   && equal_term ~use_eqs:false ~use_rws:false ctx pterm term ty) ->*)
-       Syntax.equal_ty ty' ty && Syntax.equal pterm term ->
-       inst0
-
-
-   | Pattern.Term pterm, _ ->
-       raise Mismatch
-       (* XXX: Unsound!  *)
-       (*
-        when tentatively (fun () ->
-          equal_term ~use_eqs:true ~use_rws:false ctx pterm term ty) ->
-       Print.warning "XXX new_match_term: skipping type matching";
-       inst0
-       *)
-
-   | _ ->
-       begin
-        (* XXX Spine creation might fail, e.g., if the
-         * pattern Pe1 is a lambda
-         * If so, we need to do something else.
-         *)
-        (*Print.debug "About to spine pattern %t" (print_pattern ctx k pat);*)
-        let pat_spine =
-          try Pattern.spine_of_term pat
-          with e ->
-            begin
-              (*Print.debug "pattern not spine-able %s" (Printexc.to_string e);*)
-              raise e
-            end in
-
-        (*let _ = Print.debug "About to spine term %t" (print_term ctx term) in*)
-        let term_spine =
-          try Pattern.spine_of_brazil term
-          with e ->
-            begin
-              (*Print.debug "term@ %t not spine-able %s" (print_term ctx term) (Printexc.to_string e); *)
-              raise e
-            end  in
-
-        match_spine pat_spine term_spine
-       end
-*)
-
-
 
 (** [rewrite_term ctx e t] rewrites term [e] of type [t] using rewrite hints
     from [ctx]. After rewriting it re-runs weak head-normalization on the
@@ -418,9 +337,6 @@ and rewrite_term ctx e t =
           | Mismatch ->
               (*Print.debug "nope";*)
                 match_hints hs
-          | Pattern.NoSpine ->
-              (*Print.debug "nope"; *)
-              match_hints hs
           (*| Error.Error (_,s1,s2) -> (Print.debug "unexpected Error %s %s" s1 s2; match_hints hs)*)
           | ex -> (Print.debug "unexpected exception %s"
                         (Printexc.to_string ex); match_hints hs)
@@ -472,14 +388,13 @@ and equal_by_equation ctx t e1 e2 =
         match_hint k pt pe1 pe2 ; true
         with
           | Mismatch -> match_hints hs
-          | Pattern.NoSpine -> match_hints hs
       end
   in
     match_hints (Context.equations ctx)
 
 (* Equality of types *)
 and equal_ty' ~use_rws ~use_eqs ctx t u =
-  (*Print.debug "equal_ty'@ %t@ %t" (print_ty ctx t) (print_ty ctx u);*)
+  Print.debug "equal_ty'@ %t@ %t" (print_ty ctx t) (print_ty ctx u);
 
   (* chk-tyeq-refl *)
   (Syntax.equal_ty t u)
@@ -638,12 +553,14 @@ and equal_whnf ~use_eqs ~use_rws ctx ((e1', loc1) as e1) ((e2', loc2) as e2) t =
     | Syntax.Var i1, Syntax.Var i2 -> i1 = i2
 
     (* chk-eq-whnf-app *)
-    | Syntax.App((x, t1, t2), e1', e2'), Syntax.App((_, u1, u2), e1'', e2'') ->
-        if tentatively (fun () -> equal_ty' ctx t1 u1
-                         && equal_ty' (Context.add_var x t1 ctx) t2 u2
-                         && equal_whnf ~use_eqs ~use_rws ctx e1' e1''
-                                       (Syntax.mkProd ~loc:loc1 x t1 t2)) then
-           equal_term ctx e2' e2'' t1
+    | Syntax.App(annot1, ef1, ex1), Syntax.App(annot2, ef2, ex2) ->
+        let x, t1, u1 = infer_app_annot "equal_whnf/left" loc1 ctx annot1 ef1 ex1 in
+        let _, t2, u2 = infer_app_annot "equal_whnf/right" loc2 ctx annot2 ef2 ex2 in
+        if tentatively (fun () -> equal_ty' ctx t1 t2
+                         && equal_ty' (Context.add_var x t1 ctx) u1 u2
+                         && equal_whnf ~use_eqs ~use_rws ctx ef1 ef2
+                                       (Syntax.mkProd ~loc:loc1 x t1 u1)) then
+           equal_term ctx ex1 ex2 t1
         else
           let e1'' = Syntax.simplify e1  in
           let e2'' = Syntax.simplify e2  in
@@ -656,6 +573,7 @@ and equal_whnf ~use_eqs ~use_rws ctx ((e1', loc1) as e1) ((e2', loc2) as e2) t =
 
             end
           else
+            (* Hail Mary equivalence check *)
             equal_term ctx e1'' e2'' t
 
     (* chk-eq-whnf-idpath *)
@@ -768,6 +686,16 @@ and equal_whnf ~use_eqs ~use_rws ctx ((e1', loc1) as e1) ((e2', loc2) as e2) t =
             equal_term ctx e1'' e2'' t
   end
 
+and expand_all_annotations ctx =
+  let expand_transf bvs term =
+    match term with
+    | Syntax.App(None, e1, e2), loc ->
+        let x, t1, t2 = infer_app_annot "expand_all_annotations" loc ctx None e1 e2  in
+        Syntax.mkApp ~loc x t1 t2 e1 e2
+    | _ -> term
+  in
+    Syntax.transform expand_transf 0
+
 and as_hint' ~use_rws ctx (_, loc) t =
   let rec collect ctx' u =
     match fst (whnf_ty ~use_rws ctx' u) with
@@ -781,8 +709,8 @@ and as_hint' ~use_rws ctx (_, loc) t =
   in
   let (k, t, e1, e2) = collect ctx t in
   let pt = Pattern.of_ty k t in
-  let pe1 = Pattern.of_term k e1 in
-  let pe2 = Pattern.of_term k e2 in
+  let pe1 = Pattern.of_term k (expand_all_annotations ctx e1) in
+  let pe2 = Pattern.of_term k (expand_all_annotations ctx e2) in
     (k, pt, pe1, pe2)
 
 (* Simple matching of a type pattern against a type. *)
@@ -888,7 +816,8 @@ and match_term ~magenta k inst l ctx p e t =
 
   | Pattern.App ((_, pt1, pt2), pe1, pe2) ->
     begin match fst e with
-      | Syntax.App ((x, t1, t2), e1, e2) ->
+      | Syntax.App (annot, e1, e2) ->
+        let x, t1, t2 = infer_app_annot "match_term/App" (snd e) ctx annot e1 e2  in
         (* We need to match the function part first, since in
            the case of a spine it probably sets metavariables
            (including type families) that occur in the type. *)
@@ -1022,6 +951,7 @@ and as_id' ~use_rws ctx t =
       None
 
 and norm_ty ctx ((t', loc) as t) : Syntax.ty =
+  let answer =
   match t' with
 
   (* norm-ty-universe *)
@@ -1092,6 +1022,12 @@ and norm_ty ctx ((t', loc) as t) : Syntax.ty =
     let e2' = norm ctx e2 in
     Syntax.mkId ~loc t' e1' e2'
 
+  in
+    let _ = if (not (Syntax.equal_ty t answer)) then
+       Print.debug "Normalizing type %t gave %t"
+          (print_ty ctx t) (print_ty ctx answer)  in
+    answer
+
 
 and norm ctx ((e', loc) as e) : Syntax.term =
   let answer =
@@ -1126,7 +1062,8 @@ and norm ctx ((e', loc) as e) : Syntax.term =
       let e' = norm ctx e in
       Syntax.mkLambda ~loc x t1' t2' e'
 
-    | Syntax.App ((x, t1, t2), e1, e2) ->
+    | Syntax.App (annot, e1, e2) ->
+      let x, t1, t2 = infer_app_annot "norm/App" loc ctx annot e1 e2  in
       let t1' = norm_ty ctx t1 in
       let t2' = norm_ty (Context.add_var x t1 ctx) t2 in
         begin match norm ctx e1 with
@@ -1246,11 +1183,15 @@ and norm ctx ((e', loc) as e) : Syntax.term =
       let e3' = norm ctx e3 in
       Syntax.mkNameId ~loc alpha e1' e2' e3'
   in
-  (*let _ = Print.debug "Recursive normalization of %t returned %t"*)
-  (*             (print_term ctx e) (print_term ctx answer)  in    *)
+  let _ =
+    if (not (Syntax.equal e answer)) then
+      Print.debug "Recursive normalization of %t returned %t"
+               (print_term ctx e) (print_term ctx answer)  in
   let rw = rewrite_term ctx answer (type_of ctx e)  in
-  (*let _ = Print.debug "Rewrites gave us %t"*)
-  (*             (print_term ctx rw)  in     *)
+  let _ =
+    if (not (Syntax.equal answer rw)) then
+      Print.debug "Rewriting %t gave us %t"
+               (print_term ctx answer) (print_term ctx rw)  in
   if Syntax.equal answer rw then
     answer
   else
