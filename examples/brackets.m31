@@ -1,0 +1,30 @@
+Parameter A C : Type.
+Parameter B : A -> Type.
+
+Check
+  (fun p => inhabit p in [])
+  :: A -> [A].
+
+Check
+  (fun p => inhabit p in [])
+  :: [A] -> [A].
+
+Check
+  (fun p => inhabit p in [])
+  :: [[A]] -> [A].
+
+Check
+  (fun p x => inhabit p in [])
+  :: [forall x : A, [B x]] -> forall x : A, [B x].
+
+(*** XXX this should work *)
+Check
+  (fun f x => inhabit f in inhabit x in [])
+  :: (A -> C) -> (A -> [C]).
+
+(* XXX this should work but it does not *)
+(*
+Check
+  (fun p => inhabit p in [])
+  :: (forall x : A, [B x]) -> [forall x : A, [B x]].
+*)

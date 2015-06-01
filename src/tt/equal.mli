@@ -26,6 +26,13 @@ val as_universal_eq : Context.t -> Tt.ty -> (Tt.ty, Tt.ty * Tt.term * Tt.term) T
     the list of binders is empty (and the call succeeds). *)
 val as_universal_ty : Context.t -> Tt.ty -> (Tt.ty, Tt.ty) Tt.abstraction
 
+(** Convert a type to auniversally quantified type aggresively by
+    unfolding as many inner products *and* stripping brackets. This
+    transformation preserves inhabitation of a type because we assume
+    that bracket types form a monad which commutes with products in
+    a suitable way. XXX refer to the exact inference rules for brackets *)
+val as_universal_bracket : Context.t -> Tt.ty -> (Tt.ty, Tt.ty) Tt.abstraction
+
 (** [inhabit_bracket ctx t] attempts to inhabit the bracket type [[t]] using
     inhabit hints. *)
 val inhabit_bracket : Context.t -> Tt.ty -> Tt.term option

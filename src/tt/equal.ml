@@ -821,3 +821,42 @@ let rec as_universal_ty ctx t =
   in
   fold ctx [] [] t
 
+(* XXX this was just copied from as_universal_eq, should refactor common code. *)
+let rec as_universal_bracket ctx t =
+  (* [xus] is the abstraction collected so far,
+     [ys] are the variables introduced which need to be abstracted away in
+          the final result. *)
+  let rec fold ctx xus ys t =
+    let (Tt.Ty (t', loc)) = whnf_ty ctx t in
+    match t' with
+
+    | Tt.Prod ([], _) ->
+      Error.impossible ~loc "empty product encountered in as_universal_ty"
+
+    | Tt.Prod ((_ :: _) as zvs, w) ->
+      let rec unabstract_binding ctx zs' zvs w =
+      begin
+        match zvs with
+        | [] ->
+          let w = Tt.unabstract_ty zs' 0 w in
+            ctx, zs', w
+        | (z,v) :: zvs ->
+          let v = Tt.unabstract_ty zs' 0 v in
+          let z', ctx = Context.add_fresh z v ctx in
+            unabstract_binding ctx (z' :: zs') zvs w
+      end
+      in
+        let ctx, zs', w = unabstract_binding ctx [] zvs w in
+          fold ctx (xus @ zvs) (zs' @ ys) w
+
+    | Tt.Bracket t ->
+      (* keep going when you hit a bracket *)
+      fold ctx xus ys t
+
+    | Tt.Type | Tt.Name _ | Tt.Bound _ | Tt.Lambda _ |  Tt.Spine _ | Tt.Eq _ | Tt.Refl _ |
+      Tt.Inhab ->
+      let t = Tt.abstract_ty ys 0 t in
+        (xus, t)
+  in
+  fold ctx [] [] t
+
