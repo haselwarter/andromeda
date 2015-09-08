@@ -31,7 +31,7 @@ let rec expr ctx (e',loc) =
 
     | Syntax.Type ->
       let t = Tt.mk_type ~loc in
-      Value.Judge (t, Tt.typ)
+      Value.Judge (t, (Tt.typ, AtomSet.empty), AtomSet.empty)
 
     | Syntax.Function (x, c) ->
        Value.Closure (close x c)
@@ -595,5 +595,5 @@ let comp_value ctx ((_,loc) as c) =
 
 let ty ctx ((_,loc) as c) =
   let r = check ctx c Tt.typ in
-  let (e, _) = Value.as_judge ~loc (Value.to_value ~loc r) in
-    Tt.ty e
+  let (e, (_, t_deps), e_deps) = Value.as_judge ~loc (Value.to_value ~loc r) in
+    Tt.ty e, (AtomSet.union t_deps e_deps)

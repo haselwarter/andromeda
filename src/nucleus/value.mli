@@ -1,5 +1,10 @@
 (** Runtime values and results *)
 
+(** A judgement [t type] *)
+type ty_judge = Tt.ty * AtomSet.t
+(** A judgement [e : t] where [e] is guaranteed to have the type [t]. *)
+type term_judge = Tt.term * ty_judge * AtomSet.t
+
 (** The values are "finished" or "computed" results. They are inert pieces
     of data.
 
@@ -7,7 +12,7 @@
     term and [t] is a type. Such a value (in a given context [ctx]) indicates
     that the judgemnet [ctx |- e : t] is derivable. *)
 type value =
-  | Judge of Tt.term * Tt.ty
+  | Judge of term_judge
   | Closure of closure
   | Handler of handler
 

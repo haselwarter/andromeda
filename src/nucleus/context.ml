@@ -13,7 +13,7 @@ module GeneralMap = Map.Make(struct
     environment of runtime bindings. *)
 type t = {
   primitive : (Name.ident * Tt.primsig) list;
-  atoms : (Name.atom * Tt.ty) list;
+  atoms : AtomSet.t;
   bound : (Name.ident * Value.value) list;
   beta : (string list list * Pattern.beta_hint list) HintMap.t;
   eta : (string list list * Pattern.eta_hint list) HintMap.t;
@@ -27,7 +27,7 @@ type t = {
 (** The empty context *)
 let empty = {
   primitive = [];
-  atoms = [];
+  atoms = AtomSet.empty;
   bound = [] ;
   beta = HintMap.empty ;
   eta = HintMap.empty ;
@@ -158,9 +158,9 @@ let add_bound x v ctx =
     NB: This is an effectful computation. *)
 let add_fresh ~loc ctx x t =
   let y = Name.fresh x in
-  let yt = Value.Judge (Tt.mk_atom ~loc y, t) in
+  let yt = Value.Judge (Tt.mk_atom ~loc y, t, AtomSet.singleton y) in
   let ctx = add_bound x yt ctx in
-  let ctx = {ctx with atoms = (y, t) :: ctx.atoms} in
+  let ctx = {ctx with atoms = AtomSet.add y ctx.atoms} in
   y, ctx
 
 let add_file f ctx =

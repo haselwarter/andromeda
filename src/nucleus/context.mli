@@ -36,7 +36,7 @@ val inhabit_hints : Pattern.hint_key -> t -> Pattern.inhabit_hint list
 
 (** [add_fresh ~loc ctx x t] generates a fresh atom [y] from identifier [x]. Return [y] and
     the context updated with [x] bound to [y:t]. *)
-val add_fresh: loc:Location.t -> t -> Name.ident -> Tt.ty -> Name.atom * t
+val add_fresh: loc:Location.t -> t -> Name.ident -> Value.ty_judge -> Name.atom * t
 
 (** Add a primitive operation of a given signature to the context.
     Fails if the variable is already bound. *)

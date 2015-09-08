@@ -107,15 +107,17 @@ let rec exec_cmd base_dir interactive ctx c =
   | Syntax.Primitive (x, yts, u) ->
     let rec fold ctx zs yts' = function
       | [] ->
-        let u = Eval.ty ctx u in
+        let u, u_deps = Eval.ty ctx u in
+        if not (AtomSet.sublist u_deps zs) then Error.runtime ~loc "Leftover atoms" ;
         let u = Tt.abstract_ty zs 0 u in
         let yts' = List.rev yts' in
         (yts', u)
       | (y, reducing, t)::yts ->
-        let t = Eval.ty ctx t in
+        let ((t', t_deps) as t) = Eval.ty ctx t in
+        if not (AtomSet.sublist t_deps zs) then Error.runtime ~loc "Leftover atoms" ;
         let z, ctx = Context.add_fresh ~loc ctx y t in
-        let t = Tt.abstract_ty zs 0 t in
-        fold ctx (z::zs) ((y, (reducing, t)) :: yts') yts
+        let t' = Tt.abstract_ty zs 0 t' in
+        fold ctx (z::zs) ((y, (reducing, t')) :: yts') yts
     in
     let ytsu = fold ctx [] [] yts in
     let ctx = Context.add_primitive x ytsu ctx in
@@ -132,10 +134,10 @@ let rec exec_cmd base_dir interactive ctx c =
   | Syntax.TopCheck c ->
      let v =
        begin match Eval.comp_value ctx c with
-             | Value.Judge (e, t) ->
+             | Value.Judge (e, (t, t_deps), e_deps) ->
                 let e = Simplify.simplify ctx e
                 and t = Simplify.simplify_ty ctx t in
-                  Value.Judge (e, t)
+                  Value.Judge (e, (t, t_deps), e_deps)
              | v -> v
        end
      in

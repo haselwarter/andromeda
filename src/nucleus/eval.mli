@@ -9,4 +9,4 @@ val comp_value : Context.t -> Syntax.comp -> Value.value
 
 (** [ty ctx c] evaluates computation [c] in context [ctx],
     checks that the result is a type and returns it. *)
-val ty : Context.t -> Syntax.comp -> Tt.ty
+val ty : Context.t -> Syntax.comp -> Value.ty_judge
