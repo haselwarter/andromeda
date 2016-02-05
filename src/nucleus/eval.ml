@@ -221,7 +221,7 @@ let rec infer (c',loc) =
         infer c2 >>= fun v ->
         Value.apply_closure f v
       | Value.Handler _ | Value.Tag _ | Value.List _ | Value.Tuple _ |
-        Value.Ref _ | Value.String _ | Value.Ident _ as h ->
+        Value.Ref _ | Value.String _ | Value.Numeral _ | Value.Ident _ as h ->
         Error.runtime ~loc "cannot apply %s" (Value.name_of h)
     end
 
@@ -334,6 +334,8 @@ let rec infer (c',loc) =
   | Syntax.String s ->
     Value.return (Value.mk_string s)
 
+  | Syntax.Numeral n -> Value.return (Value.mk_numeral n)
+
   | Syntax.GenStruct (c1,c2) ->
     check_ty c1 >>= fun (Jdg.Ty (_,target) as jt) ->
     Equal.Monad.run (Equal.as_signature jt) >>= fun ((ctx1,s),hyps1) ->
@@ -420,6 +422,7 @@ and check ((c',loc) as c) (Jdg.Ty (ctx_check, t_check') as t_check) : (Context.t
   | Syntax.Update _
   | Syntax.Sequence _
   | Syntax.String _
+  | Syntax.Numeral _
   | Syntax.GenStruct _
   | Syntax.GenProj _ ->
     (** this is the [check-infer] rule, which applies for all term formers "foo"
@@ -822,8 +825,6 @@ let rec exec_cmd base_dir interactive c =
            use_file (f, None, false, once) >>
            (if interactive then Format.printf "#processed %s@." f ;
            return ())) () fs
-
-  | Syntax.Verbosity i -> Config.verbosity := i; return ()
 
   | Syntax.Environment ->
     Value.print_env >>= fun p ->

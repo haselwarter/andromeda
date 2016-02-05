@@ -78,6 +78,7 @@ and term' =
   | Congruence of comp * comp
   | Extensionality of comp * comp
   | Reduction of comp
+  | Numeral of int
   | String of string
   | GenStruct of comp * comp
   | GenProj of comp * comp
@@ -114,7 +115,6 @@ and toplevel' =
   | TopLet of Name.ident * (Name.ident * ty) list * ty option * comp (** global let binding *)
   | TopDo of comp (** evaluate a computation at top level *)
   | TopFail of comp
-  | Verbosity of int
   | Include of string list * bool
     (** the boolean is [true] if the files should be included only once *)
   | Quit (** quit the toplevel *)

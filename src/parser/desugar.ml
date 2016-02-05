@@ -507,8 +507,9 @@ let rec comp ~yield (env : Value.env) bound (c',loc) =
      let c = comp ~yield env bound c in
      Syntax.Reduction c, loc
 
-  | Input.String s ->
-    Syntax.String s, loc
+  | Input.String s -> Syntax.String s, loc
+
+  | Input.Numeral n -> Syntax.Numeral n, loc
 
   | Input.GenStruct (c1,c2) ->
     let c1 = comp ~yield env bound c1
@@ -715,8 +716,6 @@ let toplevel (env : Value.env) bound (d', loc) =
     | Input.Quit -> Syntax.Quit
 
     | Input.Help -> Syntax.Help
-
-    | Input.Verbosity n -> Syntax.Verbosity n
 
     | Input.Include (fs, b) -> Syntax.Include (fs, b)
 

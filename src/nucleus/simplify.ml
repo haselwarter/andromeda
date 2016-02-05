@@ -143,5 +143,6 @@ let rec value env = function
   | Value.Tag (x,vs) -> Value.mk_tag x (List.map (value env) vs)
   | Value.List lst -> Value.from_list (List.map (value env) lst)
   | Value.Tuple lst -> Value.mk_tuple (List.map (value env) lst)
-  | Value.Ref _ | Value.Closure _ | Value.Handler _ | Value.String _ | Value.Ident _ as v -> v
+  | Value.Ref _ | Value.Closure _ | Value.Handler _ | Value.String _
+  | Value.Numeral _ | Value.Ident _ as v -> v
 

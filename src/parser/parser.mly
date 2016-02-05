@@ -75,7 +75,6 @@
 
 (* Toplevel directives *)
 %token ENVIRONMENT HELP QUIT
-%token VERBOSITY
 %token <string> QUOTED_STRING
 %token INCLUDE INCLUDEONCE
 
@@ -134,7 +133,6 @@ plain_topdirective:
   | ENVIRONMENT                                      { Environment }
   | HELP                                             { Help }
   | QUIT                                             { Quit }
-  | VERBOSITY n=NUMERAL                              { Verbosity n }
   | INCLUDE fs=QUOTED_STRING+                        { Include (fs, false) }
   | INCLUDEONCE fs=QUOTED_STRING+                    { Include (fs, true) }
 
@@ -212,6 +210,7 @@ plain_simple_term:
   | x=var_name                                          { Var x }
   | EXTERNAL s=QUOTED_STRING                            { External s }
   | s=QUOTED_STRING                                     { String s }
+  | n = NUMERAL                                         { Numeral n }
   | LBRACK lst=separated_list(COMMA, equal_term) RBRACK { List lst }
   | LPAREN lst=separated_nonempty_list(COMMA, term) RPAREN
                                                         { match lst with

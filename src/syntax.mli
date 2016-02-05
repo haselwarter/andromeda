@@ -76,6 +76,7 @@ and comp' =
   | Extensionality of comp * comp
   | Reduction of comp
   | String of string
+  | Numeral of int
   | GenStruct of comp * comp
   | GenProj of comp * comp
 
@@ -103,7 +104,6 @@ and toplevel' =
   | TopLet of Name.ident * comp (** global let binding *)
   | TopDo of comp (** evaluate a computation *)
   | TopFail of comp
-  | Verbosity of int
   | Include of string list * bool (** the boolean is [true] if the files should be included only once *)
   | Quit (** quit the toplevel *)
   | Help (** print help *)

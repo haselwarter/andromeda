@@ -57,6 +57,12 @@ let externals =
             Config.print_dependencies := false;
             Value.return_unit
 
+          | "verbosity" ->
+             Value.return_closure (fun v ->
+                 let n = Value.as_int ~loc v in
+                 Config.verbosity := n;
+                 Value.return_unit)
+
           | _ -> Error.runtime ~loc "unknown config %s" s
         ));
 

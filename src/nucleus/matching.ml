@@ -190,7 +190,7 @@ let rec collect_tt_pattern env xvs (p',_) ctx ({Tt.term=e';loc;_} as e) t =
      raise Match_fail
 
 let rec collect_pattern env xvs (p,loc) v =
-  match p, v with 
+  match p, v with
   | Syntax.Patt_Anonymous, _ -> xvs
 
   | Syntax.Patt_As (p,k), v ->
@@ -210,39 +210,48 @@ let rec collect_pattern env xvs (p,loc) v =
      collect_tt_pattern env xvs pe ctx e t
 
   | Syntax.Patt_Data (tag, ps), Value.Tag (tag', vs) when Name.eq_ident tag tag' ->
-    multicollect_pattern env xvs ps vs
+     multicollect_pattern env xvs ps vs
 
   | Syntax.Patt_Nil, Value.List [] ->
-    xvs
+     xvs
 
   | Syntax.Patt_Cons (p1,p2), Value.List (v1::v2) ->
-    let xvs = collect_pattern env xvs p1 v1 in
-    let xvs = collect_pattern env xvs p2 (Value.from_list v2) in
-    xvs
+     let xvs = collect_pattern env xvs p1 v1 in
+     let xvs = collect_pattern env xvs p2 (Value.from_list v2) in
+     xvs
 
   | Syntax.Patt_Tuple ps, Value.Tuple vs ->
-    multicollect_pattern env xvs ps vs
+     multicollect_pattern env xvs ps vs
 
-  | Syntax.Patt_Jdg _, (Value.Closure _ | Value.Handler _ |
-                        Value.Tag _ | Value.Ref _ | Value.List _ | Value.Tuple _ | Value.String _ | Value.Ident _)
-  | Syntax.Patt_Data _, (Value.Term _ | Value.Closure _ |
-                        Value.Handler _ | Value.Tag _ | Value.Ref _ | Value.List _ | Value.Tuple _ | Value.String _ | Value.Ident _)
-  | Syntax.Patt_Nil, (Value.Term _ | Value.Closure _ |
-                        Value.Handler _ | Value.Tag _ | Value.Ref _ | Value.List (_::_) | Value.Tuple _ | Value.String _ | Value.Ident _)
-  | Syntax.Patt_Cons _, (Value.Term _ | Value.Closure _ |
-                        Value.Handler _ | Value.Tag _ | Value.Ref _ | Value.List [] | Value.Tuple _ | Value.String _ | Value.Ident _)
-  | Syntax.Patt_Tuple _, (Value.Term _ | Value.Closure _ | Value.Handler _ | Value.Tag _ | Value.Ref _ |
-                          Value.List _ | Value.String _ | Value.Ident _) ->
+  | Syntax.Patt_Jdg _,
+    (Value.Closure _ | Value.Handler _ | Value.Tag _ | Value.Ref _
+    | Value.List _ | Value.Tuple _ | Value.String _ | Value.Numeral _ | Value.Ident _)
+  | Syntax.Patt_Data _,
+    (Value.Term _ | Value.Closure _ | Value.Handler _ | Value.Tag _
+    | Value.Ref _ | Value.List _ | Value.Tuple _ | Value.String _
+    | Value.Numeral _ | Value.Ident _)
+  | Syntax.Patt_Nil,
+    (Value.Term _ | Value.Closure _ | Value.Handler _ | Value.Tag _
+    | Value.Ref _ | Value.List (_::_) | Value.Tuple _ | Value.String _
+    | Value.Numeral _ | Value.Ident _)
+  | Syntax.Patt_Cons _,
+    (Value.Term _ | Value.Closure _ | Value.Handler _ | Value.Tag _
+    | Value.Ref _ | Value.List [] | Value.Tuple _ | Value.String _
+    | Value.Numeral _ | Value.Ident _)
+  | Syntax.Patt_Tuple _,
+    (Value.Term _ | Value.Closure _ | Value.Handler _ | Value.Tag _
+    | Value.Ref _ | Value.List _ | Value.String _ | Value.Numeral _
+    | Value.Ident _) ->
      raise Match_fail
 
 and multicollect_pattern env xvs ps vs =
   let rec fold xvs = function
     | [], [] -> xvs
     | p::ps, v::vs ->
-      let xvs = collect_pattern env xvs p v in
-      fold xvs (ps, vs)
+       let xvs = collect_pattern env xvs p v in
+       fold xvs (ps, vs)
     | ([], _::_ | _::_, []) ->
-      raise Match_fail
+       raise Match_fail
   in
   fold xvs (ps, vs)
 
