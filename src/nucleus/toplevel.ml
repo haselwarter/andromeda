@@ -3,7 +3,7 @@
 type state = {
   desugar : Desugar.Ctx.t ;
   typing : Mlty.Ctx.t ;
-  runtime : Runtime.env
+  runtime : unit Runtime.progress
 }
 
 let comp_value c =
@@ -52,14 +52,6 @@ let comp_signature ~loc lxcs =
 
 
 (** Evaluation of toplevel computations *)
-
-let parse lex parse resource =
-  try
-    lex parse resource
-  with
-  | Ulexbuf.Parse_Error (w, p_start, p_end) ->
-     let loc = Location.make p_start p_end in
-     Error.syntax ~loc "Unexpected: %s" w
 
 
 (** The help text printed when [#help] is used. *)
@@ -115,10 +107,12 @@ let topletrec_bind ~loc interactive fxcs =
           Format.printf "%t is defined.@." (Name.print_ident f)) fxcs ;
   return ()
 
-let rec exec_cmd base_dir interactive c {desugar; typing; runtime} =
-  let desugar, ({Location.thing=c'; loc} as c) = Desugar.toplevel desugar c in
-  let typing = Mlty.infer typing c in
+let rec chain_cmd ~interactive {Location.thing=c'; loc} =
   match c' with
+
+  | Syntax.DefMLType _ -> failwith "TODO"
+
+  | Syntax.DefMLTypeRec _ -> failwith "TODO"
 
   | Syntax.DeclOperation (x, k) ->
      Runtime.add_operation ~loc x >>= fun () ->
@@ -181,19 +175,17 @@ let rec exec_cmd base_dir interactive c {desugar; typing; runtime} =
         Error.runtime ~loc "The command has not failed: got %t." (pval v)
      end
 
-  | Syntax.Included lst ->
-     failwith "not implemented"
-     (* mfold (fun () fn -> *)
-     (*     (\* don't print deeper includes *\) *)
-     (*     if interactive then Format.printf "#including %s@." fn ; *)
-     (*     let fn = *)
-     (*       if Filename.is_relative fn *)
-     (*       then Filename.concat base_dir fn *)
-     (*       else fn *)
-     (*     in *)
-     (*     use_file ~fn ~interactive:false >>= fun () -> *)
-     (*     (if interactive then Format.printf "#processed %s@." fn ; *)
-     (*      return ())) () fs *)
+  | Syntax.Included (fn, cmds) ->
+
+     return () >>= fun () ->
+     if interactive then Format.printf "#including %s@." fn ;
+     return () >>= fun () ->
+
+     (mfold (fun () c ->
+         (* don't print deeper includes *)
+         chain_cmd ~interactive:false c) () cmds) >>= (fun () ->
+         if interactive then Format.printf "#processed %s@." fn ;
+         return ())
 
   | Syntax.Verbosity i -> Config.verbosity := i; return ()
 
@@ -208,12 +200,47 @@ let rec exec_cmd base_dir interactive c {desugar; typing; runtime} =
   | Syntax.Quit ->
      exit 0
 
-and use_file ~fn ~limit ~interactive ~state =
-  if Runtime.included fn then return () else
+let use_file ~fn ~interactive state =
+  if Desugar.Ctx.included fn state.desugar then state else
     begin
-      let cmds = parse (Lexer.read_file ?line_limit) Parser.file fn in
+      let cmds = Ulexbuf.parse Lexer.read_file Parser.file fn in
       let base_dir = Filename.dirname fn in
-      let typing, cmds = typecheck cmds typing in
-      Runtime.push_file fn >>= fun () ->
-      mfold (fun () c -> chain_cmd base_dir interactive c) () cmds
+
+      let state, cmds =
+        List.fold_left
+          (fun (state, cmds) c ->
+             match Desugar.toplevel ~base_dir state.desugar c with
+             | None -> (state, cmds)
+             | Some (desugar, cmd) ->
+                let state = { state with desugar } in
+                state, cmds @ [cmd])
+          (state, []) cmds in
+      let state =
+        List.fold_left
+          (fun state c ->
+             let typing = Mlty.infer state.typing c in
+             { state with typing = typing })
+          state cmds in
+      let cmds = mfold (fun () c -> chain_cmd ~interactive c) () cmds in
+      let runtime = Runtime.step state.runtime (fun () -> cmds) in
+      { state with runtime }
     end
+
+let exec_cmd base_dir interactive cmd state =
+  match Desugar.toplevel ~base_dir state.desugar cmd with
+  | None -> state
+  | Some (desugar, cmd) ->
+     let state = { state with desugar } in
+     let typing = Mlty.infer state.typing cmd in
+     let state = { state with typing = typing } in
+     let runtime =
+       Runtime.step state.runtime
+         (fun () -> chain_cmd ~interactive cmd) in
+     { state with runtime }
+
+
+let initial =
+  let desugar = Desugar.Ctx.empty
+  and typing  = Mlty.Ctx.empty
+  and runtime = Runtime.start (Runtime.top_return ()) in
+  { desugar; typing; runtime }

@@ -1,2 +1,2 @@
-#include_once "std/base.m31"
-#include_once "std/equal.m31"
+#include "std/base.m31"
+#include "std/equal.m31"

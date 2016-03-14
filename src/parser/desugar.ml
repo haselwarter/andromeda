@@ -11,16 +11,19 @@ module Ctx = struct
   (** The arity of an operation or a data constructor. *)
   type arity = int
 
+  (** Used in the [info] type to indicate whether the index is known *)
+  type unknown_index = Unknown
+
   (** Information about names *)
-  type info =
-    | Variable of scoping
+  type 'index info =
+    | Variable of 'index * scoping
     | Constant
     | Constructor of arity
     | Operation of arity
     | Signature
 
   type t = {
-      bound : (Name.ident * info) list;
+      bound : (Name.ident * unknown_index info) list;
       tydefs : (Name.ident * arity) list;
       files : string list;
     }
@@ -31,10 +34,17 @@ module Ctx = struct
       files = []
     }
 
+
   let find ~loc x {bound; _} =
+    let at_index i = function
+      | Variable (Unknown, s) -> Variable (i, s)
+      | Constant -> Constant
+      | Signature -> Signature
+      | Constructor k -> Constructor k
+      | Operation k -> Operation k in
     let rec search i = function
       | [] -> Error.syntax ~loc "unknown name %t" (Name.print_ident x)
-      | (y, info) :: _ when Name.eq_ident x y -> (i, info)
+      | (y, info) :: _ when Name.eq_ident y x -> at_index i info
       | (_, Variable _) :: bound -> search (i+1) bound
       | (_, (Constant | Constructor _ | Operation _ | Signature)) :: bound ->
          search i bound
@@ -43,27 +53,27 @@ module Ctx = struct
 
   let get_dynamic ~loc x ctx =
     match find ~loc x ctx with
-    | (i, Variable Dynamic) -> i
-    | (_, (Variable Lexical | Signature | Constant | Operation _ | Constructor _)) ->
+    | Variable (i, Dynamic) -> i
+    | (Variable (_, Lexical) | Signature | Constant | Operation _ | Constructor _) ->
        Error.syntax ~loc "%t is not a dynamic variable" (Name.print_ident x)
 
   let check_signature ~loc x ctx =
-    match snd (find ~loc x ctx) with
+    match find ~loc x ctx with
     | Signature -> ()
     | (Variable _ | Constant | Operation _ | Constructor _) ->
        Error.syntax ~loc "%t is not a signature." (Name.print_ident x)
 
   let get_operation ~loc x ctx =
-    match snd (find ~loc x ctx) with
+    match find ~loc x ctx with
     | Operation k -> k
     | Variable _ | Constant | Constructor _ | Signature ->
        Error.syntax ~loc "%t is not a operation." (Name.print_ident x)
 
   let add_lexical x ctx =
-    { ctx with bound = (x, Variable Lexical) :: ctx.bound }
+    { ctx with bound = (x, Variable (Unknown, Lexical)) :: ctx.bound }
 
   let add_dynamic x ctx =
-    { ctx with bound = (x, Variable Dynamic) :: ctx.bound }
+    { ctx with bound = (x, Variable (Unknown, Dynamic)) :: ctx.bound }
 
   let add_operation op k ctx =
     { ctx with bound = (op, Operation k) :: ctx.bound }
@@ -144,9 +154,9 @@ let rec tt_pattern bound vars n (p,loc) =
      (locate Syntax.Tt_Type loc), vars, n
 
   | Input.Tt_Name x ->
-     let (i, info) = Ctx.find ~loc x bound in
+     let info = Ctx.find ~loc x bound in
      begin match info with
-     | Ctx.Variable _ -> locate (Syntax.Tt_Bound i) loc, vars, n
+     | Ctx.Variable (i, _) -> locate (Syntax.Tt_Bound i) loc, vars, n
      | Ctx.Constant -> locate (Syntax.Tt_Constant x) loc, vars, n
      | Ctx.Constructor _ -> Error.syntax ~loc "data constructor in a term pattern"
      | Ctx.Operation _ -> Error.syntax ~loc "operation in a term pattern"
@@ -275,9 +285,9 @@ and pattern bound vars n (p,loc) =
      end
 
   | Input.Patt_Name x ->
-     let (i, info) = Ctx.find ~loc x bound in
+     let info = Ctx.find ~loc x bound in
      begin match info with
-     | Ctx.Variable _ ->
+     | Ctx.Variable (i, _) ->
         locate (Syntax.Patt_Bound i) loc, vars, n
      | Ctx.Constructor k ->
         if k = 0
@@ -302,7 +312,7 @@ and pattern bound vars n (p,loc) =
      locate (Syntax.Patt_Jdg (p1,p2)) loc, vars, n
 
   | Input.Patt_Constr (c,ps) ->
-     begin match snd (Ctx.find ~loc c bound) with
+     begin match Ctx.find ~loc c bound with
      | Ctx.Constructor k ->
         if k = List.length ps
         then
@@ -486,9 +496,9 @@ let rec comp ~yield bound (c',loc) =
      locate (Syntax.Projection (c,l)) loc
 
   | Input.Var x ->
-     let (i, info) = Ctx.find ~loc x bound in
+     let info = Ctx.find ~loc x bound in
      begin match info with
-     | Ctx.Variable _ -> locate (Syntax.Bound i) loc
+     | Ctx.Variable (i, _) -> locate (Syntax.Bound i) loc
      | Ctx.Constant -> locate (Syntax.Constant x) loc
      | Ctx.Constructor k ->
         if k = 0 then locate (Syntax.Constructor (x, [])) loc
@@ -663,9 +673,9 @@ and spine ~yield bound ((c',loc) as c) cs =
   let c, cs =
     match c' with
     | Input.Var x ->
-       let (i, info) = Ctx.find ~loc x bound in
+       let info = Ctx.find ~loc x bound in
        begin match info with
-       | Ctx.Variable _ ->
+       | Ctx.Variable (i,_) ->
           locate (Syntax.Bound i) loc, cs
        | Ctx.Constant ->
           locate (Syntax.Constant x) loc, cs
@@ -850,26 +860,26 @@ let mlty_defs ~loc ctx lst =
 
 let mlty_rec_defs ~loc ctx lst  = assert false
 
-let toplevel ctx (cmd, loc) =
+let rec toplevel ~base_dir ctx (cmd, loc) =
   match cmd with
 
     | Input.DeclOperation (op, (params, args, res)) ->
        let args, res = decl_operation ~loc ctx params args res in
        let ctx = Ctx.add_operation op (List.length args) ctx in
-       (ctx, locate (Syntax.DeclOperation (op, (params, args, res))) loc)
+       Some (ctx, locate (Syntax.DeclOperation (op, (params, args, res))) loc)
 
     | Input.DefMLType lst ->
        let ctx, lst = mlty_defs ~loc ctx lst in
-       (ctx, locate (Syntax.DefMLType lst) loc)
+       Some (ctx, locate (Syntax.DefMLType lst) loc)
 
     | Input.DefMLTypeRec lst ->
        let ctx, lst = mlty_rec_defs ~loc ctx lst in
-       (ctx, locate (Syntax.DefMLTypeRec lst) loc)
+       Some (ctx, locate (Syntax.DefMLTypeRec lst) loc)
 
     | Input.DeclConstants (xs, u) ->
        let u = comp ~yield:false ctx u
        and ctx = List.fold_left (fun ctx x -> Ctx.add_constant x ctx) ctx xs in
-       (ctx, locate (Syntax.DeclConstants (xs, u)) loc)
+       Some (ctx, locate (Syntax.DeclConstants (xs, u)) loc)
 
     | Input.DeclSignature (s, lst) ->
        let rec fold ctx labels res = function
@@ -886,7 +896,7 @@ let toplevel ctx (cmd, loc) =
        in
        let lst = fold ctx [] [] lst in
        let ctx = Ctx.add_signature s ctx in
-       (ctx, locate (Syntax.DeclSignature (s, lst)) loc)
+       Some (ctx, locate (Syntax.DeclSignature (s, lst)) loc)
 
     | Input.TopHandle lst ->
        let lst =
@@ -905,45 +915,79 @@ let toplevel ctx (cmd, loc) =
            )
            lst
        in
-       (ctx, locate (Syntax.TopHandle lst) loc)
+       Some (ctx, locate (Syntax.TopHandle lst) loc)
 
     | Input.TopLet lst ->
        let ctx, lst = let_clauses ~loc ~yield:false ctx lst in
-       (ctx, locate (Syntax.TopLet lst) loc)
+       Some (ctx, locate (Syntax.TopLet lst) loc)
 
     | Input.TopLetRec lst ->
        let ctx, lst = letrec_clauses ~loc ~yield:false ctx lst in
-       (ctx, locate (Syntax.TopLetRec lst) loc)
+       Some (ctx, locate (Syntax.TopLetRec lst) loc)
 
     | Input.TopDynamic (x,c) ->
        let c = comp ~yield:false ctx c in
        let ctx = Ctx.add_dynamic x ctx in
-       (ctx, locate (Syntax.TopDynamic (x,c)) loc)
+       Some (ctx, locate (Syntax.TopDynamic (x,c)) loc)
 
     | Input.TopNow (x,c) ->
        let y = Ctx.get_dynamic ~loc x ctx in
        let c = comp ~yield:false ctx c in
-       (ctx, locate (Syntax.TopNow (y,c)) loc)
+       Some (ctx, locate (Syntax.TopNow (y,c)) loc)
 
     | Input.TopDo c ->
        let c = comp ~yield:false ctx c in
-       (ctx, locate (Syntax.TopDo c) loc)
+       Some (ctx, locate (Syntax.TopDo c) loc)
 
     | Input.TopFail c ->
        let c = lazy (comp ~yield:false ctx c) in
-       (ctx, locate (Syntax.TopFail c) loc)
+       Some (ctx, locate (Syntax.TopFail c) loc)
 
     | Input.Quit ->
-       (ctx, locate Syntax.Quit loc)
+       Some (ctx, locate Syntax.Quit loc)
 
     | Input.Help ->
-       (ctx, locate Syntax.Help loc)
+       Some (ctx, locate Syntax.Help loc)
 
     | Input.Verbosity n ->
-       (ctx, locate (Syntax.Verbosity n) loc)
+       Some (ctx, locate (Syntax.Verbosity n) loc)
 
-    | Input.Include (fs, b) ->
-       assert false (* TODO *)
+    | Input.Include fn ->
+
+     (*     (\* don't print deeper includes *\) *)
+     (*     if interactive then Format.printf "#including %s@." fn ; *)
+     (*     let fn = *)
+     (*       if Filename.is_relative fn *)
+     (*       then Filename.concat base_dir fn *)
+     (*       else fn *)
+     (*     in *)
+     (*     use_file ~fn ~interactive:false >>= fun () -> *)
+     (*     (if interactive then Format.printf "#processed %s@." fn ; *)
+
+       let fn =
+         if Filename.is_relative fn
+         then Filename.concat base_dir fn
+         else fn in
+
+       if Ctx.included fn ctx
+       then
+         None
+       else
+         let cmds = Ulexbuf.parse Lexer.read_file Parser.file fn
+         and base_dir = Filename.dirname fn in
+         let ctx = Ctx.push_file fn ctx in
+
+         let (ctx, cmds) =
+           List.fold_left
+             (fun (ctx, cmds) cmd ->
+                match toplevel ~base_dir ctx cmd with
+                | None -> (ctx, cmds)
+                | Some (ctx, cmds') -> (ctx, cmds @ cmds))
+             (ctx, []) cmds in
+
+         Some (ctx, locate ((Syntax.Included (fn, cmds))) loc)
 
     | Input.Environment ->
-       (ctx, locate Syntax.Environment loc)
+       Some (ctx, locate Syntax.Environment loc)
+
+(* Filename.current_dir_name *)

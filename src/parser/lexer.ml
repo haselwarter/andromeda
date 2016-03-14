@@ -92,6 +92,8 @@ let update_eoi ({ pos_end; line_limit;_ } as lexbuf) =
     if pos_end.Lexing.pos_lnum >= line_limit
     then reached_end_of_input lexbuf
 
+let loc_of lex = Location.make lex.pos_start lex.pos_end
+
 let rec token ({ end_of_input;_ } as lexbuf) =
   if end_of_input then EOF else token_aux lexbuf
 
@@ -109,7 +111,6 @@ and token_aux ({ stream;_ } as lexbuf) =
   | "#quit"                  -> f (); g (); QUIT
   | "#verbosity"             -> f (); VERBOSITY
   | "#include"               -> f (); INCLUDE
-  | "#include_once"          -> f (); INCLUDEONCE
   | quoted_string            -> f (); let s = lexeme lexbuf in QUOTED_STRING (String.sub s 1 (String.length s - 2))
   | '('                      -> f (); LPAREN
   | ')'                      -> f (); RPAREN
@@ -133,23 +134,23 @@ and token_aux ({ stream;_ } as lexbuf) =
   | ":="                     -> f (); COLONEQ
   | ';'                      -> f (); SEMICOLON
   | prefixop                 -> f (); PREFIXOP (let s = lexeme lexbuf in
-                                                Name.make ~fixity:Name.Prefix s, Location.of_lexeme lexbuf)
+                                                Name.make ~fixity:Name.Prefix s, loc_of lexbuf)
   | infixop0                 -> f (); INFIXOP0 (let s = lexeme lexbuf in
-                                                Name.make ~fixity:(Name.Infix Level.Infix0) s, Location.of_lexeme lexbuf)
+                                                Name.make ~fixity:(Name.Infix Level.Infix0) s, loc_of lexbuf)
   | infixop1                 -> f (); INFIXOP1 (let s = lexeme lexbuf in
-                                                Name.make ~fixity:(Name.Infix Level.Infix1) s, Location.of_lexeme lexbuf)
+                                                Name.make ~fixity:(Name.Infix Level.Infix1) s, loc_of lexbuf)
   | infixcons                -> f (); INFIXCONS(let s = lexeme lexbuf in
-                                                Name.make ~fixity:(Name.Infix Level.InfixCons) s, Location.of_lexeme lexbuf)
+                                                Name.make ~fixity:(Name.Infix Level.InfixCons) s, loc_of lexbuf)
   | infixop2                 -> f (); INFIXOP2 (let s = lexeme lexbuf in
-                                                Name.make ~fixity:(Name.Infix Level.Infix2) s, Location.of_lexeme lexbuf)
+                                                Name.make ~fixity:(Name.Infix Level.Infix2) s, loc_of lexbuf)
   (* Comes before infixop3 because ** matches the infixop3 pattern too *)
   | infixop4                 -> f (); INFIXOP4 (let s = lexeme lexbuf in
-                                                Name.make ~fixity:(Name.Infix Level.Infix4) s, Location.of_lexeme lexbuf)
+                                                Name.make ~fixity:(Name.Infix Level.Infix4) s, loc_of lexbuf)
   (* Comes before infixop3 because * matches the infixop3 pattern too *)
-  | '*'                      -> f (); STAR (Name.make ~fixity:(Name.Infix Level.Infix3) "*", Location.of_lexeme lexbuf)
+  | '*'                      -> f (); STAR (Name.make ~fixity:(Name.Infix Level.Infix3) "*", loc_of lexbuf)
   (* Comes before infixop3 because * matches the infixop3 pattern too *)
   | infixop3                 -> f (); INFIXOP3 (let s = lexeme lexbuf in
-                                                Name.make ~fixity:(Name.Infix Level.Infix3) s, Location.of_lexeme lexbuf)
+                                                Name.make ~fixity:(Name.Infix Level.Infix3) s, loc_of lexbuf)
 
   | eof                      -> f (); EOF
   | name                     -> f ();
@@ -160,10 +161,10 @@ and token_aux ({ stream;_ } as lexbuf) =
   | numeral                  -> f (); let k = int_of_string (lexeme lexbuf) in NUMERAL k
   | any -> f ();
     let c = lexeme lexbuf in
-    Error.syntax ~loc:(Location.of_lexeme lexbuf)
+    Error.syntax ~loc:(loc_of lexbuf)
       "Unexpected character: %s" c
   | _ -> f ();
-    Error.syntax ~loc:(Location.of_lexeme lexbuf)
+    Error.syntax ~loc:(loc_of lexbuf)
       "Unexpected character, failed to parse"
 
 and comments level ({ stream;_ } as lexbuf) =
@@ -177,9 +178,9 @@ and comments level ({ stream;_ } as lexbuf) =
   | start_longcomment -> comments (level+1) lexbuf
   | '\n'        -> new_line lexbuf; comments level lexbuf
   | eof         ->
-    Error.syntax ~loc:(Location.of_lexeme lexbuf) "Input ended inside (unclosed) comment"
+    Error.syntax ~loc:(loc_of lexbuf) "Input ended inside (unclosed) comment"
   | any           -> comments level lexbuf
-  | _ -> Error.syntax ~loc:(Location.of_lexeme lexbuf)
+  | _ -> Error.syntax ~loc:(loc_of lexbuf)
            "Unexpected character in comment"
 
 
@@ -187,11 +188,9 @@ and comments level ({ stream;_ } as lexbuf) =
 (* the type of run is also:  *)
 (* (t -> 'a) -> ('a, 'b) MenhirLib.Convert.traditional -> t -> 'b *)
 let run
-    ?(line_limit : int option)
     (lexer : t -> 'a)
     (parser : (Lexing.lexbuf -> 'a) -> Lexing.lexbuf -> 'b)
     (lexbuf : t) : 'b =
-  set_line_limit line_limit lexbuf;
   let lexer () =
     let token = lexer lexbuf in
     (token, lexbuf.pos_start, lexbuf.pos_end) in
@@ -206,12 +205,12 @@ let run
      raise (Parse_Error (w, lexbuf.pos_start, lexbuf.pos_end))
 
 
-let read_file ?line_limit parse fn =
+let read_file parse fn =
   try
     let fh = open_in fn in
     let lex = from_channel ~fn fh in
     try
-      let terms = run ?line_limit token parse lex in
+      let terms = run token parse lex in
       close_in fh;
       terms
     with

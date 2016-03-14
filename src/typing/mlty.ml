@@ -62,7 +62,9 @@ module Ctx = struct
 end
 
 let infer ctx c =
-  assert false
+  ignore c;
+  ctx
+
   (* match c with *)
 
   (* | Syntax.Include_begin _ *)

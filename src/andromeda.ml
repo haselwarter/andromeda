@@ -79,7 +79,7 @@ let interactive_shell state =
   let rec loop state =
     let state =
       try
-        let cmd = Toplevel.parse Lexer.read_toplevel Parser.commandline () in
+        let cmd = Ulexbuf.parse Lexer.read_toplevel Parser.commandline () in
         Toplevel.exec_cmd Filename.current_dir_name true cmd state
       with
       | Error.Error err -> Print.error "%t" (Error.print err); state
