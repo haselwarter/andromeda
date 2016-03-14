@@ -839,26 +839,36 @@ let decl_operation ~loc ctx params args res =
   and res = mlty ctx params res in
   args, res
 
+(* TODO check for reuse of type and constructor name (eg type foo = Bob | Bob) *)
+
+(* [mlty_def ctx params def] desugars [def] and adds the constructors to [ctx] *)
 let mlty_def ctx params def =
   match def with
   | Input.ML_Alias ty ->
      let ty = mlty ctx params ty in
-     Syntax.ML_Alias ty
+     ctx, Syntax.ML_Alias ty
   | Input.ML_Sum lst ->
-     failwith "Not implemented"
+    let rec fold ctx res = function
+      | [] -> ctx, Syntax.ML_Sum (List.rev res)
+      | (c,args,out) :: lst ->
+        let args = List.map (mlty ctx params) args
+        and out = List.map (mlty ctx params) out in
+        let ctx = Ctx.add_constructor c (List.length args) ctx in
+        fold ctx ((c,args,out)::res) lst
+    in
+    fold ctx [] lst
 
-let mlty_defs ~loc ctx lst =
-  let rec fold ctx' defs = function
-    | [] -> ctx', List.rev defs
+let mlty_defs ~loc ctx lst = assert false
+
+let mlty_rec_defs ~loc ctx lst =
+  let ctx = List.fold_left (fun ctx (t, (params,_)) -> Ctx.add_tydef t (List.length params)) in
+  let rec fold ctx defs = function
+    | [] -> ctx, List.rev defs
     | (t, (params, def)) :: lst ->
-       (* NB: parallel definition, must use original ctx here *)
-       let def = mlty_def ctx params def in
-       let ctx' = Ctx.add_tydef t (List.length params) ctx' in
-       fold ctx' ((t, (params, def)) :: defs) lst
+       let ctx, def = mlty_def ctx params def in
+       fold ctx ((t, (params, def)) :: defs) lst
   in
   fold ctx [] lst
-
-let mlty_rec_defs ~loc ctx lst  = assert false
 
 let rec toplevel ~base_dir ctx (cmd, loc) =
   match cmd with
@@ -989,5 +999,3 @@ let rec toplevel ~base_dir ctx (cmd, loc) =
 
     | Input.Environment ->
        Some (ctx, locate Syntax.Environment loc)
-
-(* Filename.current_dir_name *)
