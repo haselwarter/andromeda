@@ -526,11 +526,12 @@ plain_prod_mlty:
 app_mlty: mark_location(plain_app_mlty) { $1 }
 plain_app_mlty:
   | plain_simple_mlty                   { $1 }
-  | c=var_name args=list(simple_mlty)   { ML_TyApply (c, args) }
+  | c=var_name args=nonempty_list(simple_mlty)   { ML_TyApply (c, args) }
 
 simple_mlty: mark_location(plain_simple_mlty) { $1 }
 plain_simple_mlty:
   | LPAREN t=plain_mlty RPAREN          { t }
+  | a=var_name                          { ML_TyApply (a, []) }
   | JUDGMENT                            { ML_Judgment }
 
 mlty_defs:

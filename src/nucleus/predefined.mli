@@ -1,4 +1,4 @@
-val predefined_aml_types : string
+val predefined_ml_types : string
 val predefined_ops : string
 
 val operation_equal : Runtime.value -> Runtime.value -> Runtime.value Runtime.comp

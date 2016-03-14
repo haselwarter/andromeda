@@ -205,6 +205,10 @@ let run
      raise (Parse_Error (w, lexbuf.pos_start, lexbuf.pos_end))
 
 
+let read_string parse s =
+  let lex = from_string s in
+  run token parse lex
+
 let read_file parse fn =
   try
     let fh = open_in fn in

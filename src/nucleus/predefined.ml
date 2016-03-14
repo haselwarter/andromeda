@@ -5,7 +5,8 @@ let name_constrained   = Name.make "Constrained"
 let name_cons          = Name.cons
 let name_nil           = Name.nil
 
-let predefined_aml_types =
+let predefined_ml_types =
+  let decl_judgment = ["mltype Judgment ="] in
   let decl_option =
     ["mltype option α = ";
      "  | None : option α ";
@@ -19,7 +20,7 @@ let predefined_aml_types =
     "  | nil : list α";
     "  | cons : α → list α → list α"]
   in
-  List.map (String.concat "\n") [decl_option; decl_constrain; decl_list]
+  List.map (String.concat "\n") [decl_judgment; decl_option; decl_constrain; decl_list]
   |> (String.concat "\n")
 
 let name_equal        = Name.make "equal"

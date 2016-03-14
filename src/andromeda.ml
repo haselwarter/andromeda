@@ -140,7 +140,7 @@ let main =
     let topstate =
       List.fold_left
         (fun topstate (fn, interactive) -> Toplevel.use_file ~fn ~interactive topstate)
-        Toplevel.initial !files in
+        (Toplevel.initial ()) !files in
 
     if !Config.interactive_shell
       then interactive_shell topstate

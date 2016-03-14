@@ -10,4 +10,4 @@ val use_file : fn:string -> interactive:bool -> state -> state
     The environment is passed through a state monad. *)
 val exec_cmd : string -> bool -> Input.toplevel -> state -> state
 
-val initial : state
+val initial : unit -> state

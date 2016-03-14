@@ -110,9 +110,9 @@ let topletrec_bind ~loc interactive fxcs =
 let rec chain_cmd ~interactive {Location.thing=c'; loc} =
   match c' with
 
-  | Syntax.DefMLType _ -> failwith "TODO"
+  | Syntax.DefMLType _ -> return (Print.warning "TODO")
 
-  | Syntax.DefMLTypeRec _ -> failwith "TODO"
+  | Syntax.DefMLTypeRec _ -> return (Print.warning "TODO")
 
   | Syntax.DeclOperation (x, k) ->
      Runtime.add_operation ~loc x >>= fun () ->
@@ -239,8 +239,23 @@ let exec_cmd base_dir interactive cmd state =
      { state with runtime }
 
 
-let initial =
+let initial () =
   let desugar = Desugar.Ctx.empty
   and typing  = Mlty.Ctx.empty
   and runtime = Runtime.start (Runtime.top_return ()) in
-  { desugar; typing; runtime }
+  let state = { desugar; typing; runtime } in
+
+  let typs = Ulexbuf.parse Lexer.read_string Parser.file Predefined.predefined_ml_types in
+  let state =
+    List.fold_left (fun state cmd ->
+        (* TODO change interactive to [false] *)
+        exec_cmd Filename.current_dir_name true cmd state)
+      state
+      typs in
+
+  let ops = Ulexbuf.parse Lexer.read_string Parser.file Predefined.predefined_ops in
+  List.fold_left (fun state cmd ->
+      (* TODO change interactive to [false] *)
+      exec_cmd Filename.current_dir_name true cmd state)
+    state
+    ops
