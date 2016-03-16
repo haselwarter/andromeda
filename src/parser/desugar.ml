@@ -852,16 +852,17 @@ let mlty_def ctx params def =
       | [] -> ctx, Syntax.ML_Sum (List.rev res)
       | (c,args,out) :: lst ->
         let args = List.map (mlty ctx params) args
-        and out = List.map (mlty ctx params) out in
+        and out = mlty ctx params out in
         let ctx = Ctx.add_constructor c (List.length args) ctx in
         fold ctx ((c,args,out)::res) lst
     in
     fold ctx [] lst
 
-let mlty_defs ~loc ctx lst = assert false
-
-let mlty_rec_defs ~loc ctx lst =
-  let ctx = List.fold_left (fun ctx (t, (params,_)) -> Ctx.add_tydef t (List.length params)) in
+let mlty_rec_defs ~loc (ctx : Ctx.t) lst =
+  let ctx = List.fold_left
+      (fun ctx (t, (params,_)) -> Ctx.add_tydef t (List.length params) ctx)
+      ctx lst
+  in
   let rec fold ctx defs = function
     | [] -> ctx, List.rev defs
     | (t, (params, def)) :: lst ->
@@ -869,6 +870,15 @@ let mlty_rec_defs ~loc ctx lst =
        fold ctx ((t, (params, def)) :: defs) lst
   in
   fold ctx [] lst
+
+let mlty_defs ~loc ctx lst =
+  List.map
+    (fun (t, (params, def)) ->
+       let ctx, def = mlty_def ctx params def
+
+  Error.warning "TODO: WRONG";
+  mlty_rec_defs ~loc ctx lst
+
 
 let rec toplevel ~base_dir ctx (cmd, loc) =
   match cmd with
@@ -964,24 +974,10 @@ let rec toplevel ~base_dir ctx (cmd, loc) =
 
     | Input.Include fn ->
 
-     (*     (\* don't print deeper includes *\) *)
-     (*     if interactive then Format.printf "#including %s@." fn ; *)
-     (*     let fn = *)
-     (*       if Filename.is_relative fn *)
-     (*       then Filename.concat base_dir fn *)
-     (*       else fn *)
-     (*     in *)
-     (*     use_file ~fn ~interactive:false >>= fun () -> *)
-     (*     (if interactive then Format.printf "#processed %s@." fn ; *)
-
-       let fn =
-         if Filename.is_relative fn
-         then Filename.concat base_dir fn
-         else fn in
+       let fn = if Filename.is_relative fn then Filename.concat base_dir fn else fn in
 
        if Ctx.included fn ctx
-       then
-         None
+       then None
        else
          let cmds = Ulexbuf.parse Lexer.read_file Parser.file fn
          and base_dir = Filename.dirname fn in

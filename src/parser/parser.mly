@@ -68,6 +68,7 @@
 (* Meta types *)
 %token JUDGMENT
 %token MLTYPE
+%token UNIT
 
 (* REFERENCES *)
 %token BANG COLONEQ REF
@@ -516,6 +517,7 @@ plain_mlty:
 
 prod_mlty: mark_location(plain_prod_mlty) { $1 }
 plain_prod_mlty:
+  | UNIT                             { ML_Prod [] }
   | ts=separated_nonempty_list(STAR, app_mlty)
     { match ts with
       | [] -> assert false

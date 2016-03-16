@@ -7,6 +7,8 @@ let name_nil           = Name.nil
 
 let predefined_ml_types =
   let decl_judgment = ["mltype Judgment ="] in
+  (* TODO *)
+  (* let decl_mlunit = ["mltype "] in *)
   let decl_option =
     ["mltype option α = ";
      "  | None : option α ";
@@ -30,10 +32,10 @@ let name_as_signature = Name.make "as_signature"
 
 let predefined_ops =
   let ops =
-    ["operation equal : Judgement -> Judgement -> Judgement";
-     "operation as_prod : Judgement -> option Judgement";
-     "operation as_eq : Judgement -> option Judgement";
-     "operation as_signature : Judgement -> option Judgement"] in
+    ["operation equal : Judgment -> Judgment -> Judgment";
+     "operation as_prod : Judgment -> option Judgment";
+     "operation as_eq : Judgment -> option Judgment";
+     "operation as_signature : Judgment -> option Judgment"] in
   String.concat "\n" ops
 
 

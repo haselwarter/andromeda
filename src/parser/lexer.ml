@@ -44,6 +44,7 @@ let reserved = [
   ("ref", REF) ;
   ("refl", REFL) ;
   ("signature", SIGNATURE) ;
+  ("mlunit", UNIT) ;
   ("val", VAL) ;
   ("where", WHERE) ;
   ("with", WITH) ;
