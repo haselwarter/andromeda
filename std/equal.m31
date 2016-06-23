@@ -469,12 +469,11 @@ and whnf_term_no_betas imps e =
                    a and a' are syntactically equal and so we need B[a/y] == D[a/y]. *)
                 (* theta : D[a'/y] == typeof e *)
                 let theta =
-                  transitivity 
+                  transitivity
                   (eqDB' where y = convert a (symmetry eqCA)) (* : D[a/y] == B'[a/y] *)
-                  (natural e) (* : B[a/x] == typeof e *)
-                 in
-                 (* XXX our best attempt at the moment *)
-                 transitivity zeta (convert_eq xi theta)
+                  (natural e) in (* : B[a/x] == typeof e *)
+                let xi = convert xi (convert_eq (typeof xi) theta) in
+                transitivity zeta xi
               end
             end
           end
