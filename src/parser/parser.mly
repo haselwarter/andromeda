@@ -137,7 +137,7 @@ plain_topcomp:
 (* Toplevel directive. *)
 topdirective: mark_location(plain_topdirective)      { $1 }
 plain_topdirective:
-  | INCLUDEONCE fs=QUOTED_STRING+                    { Include fs }
+  | INCLUDEONCE fs=separated_nonempty_list(COMMA, QUOTED_STRING) { Include fs }
 
 (* Main syntax tree *)
 

@@ -124,7 +124,7 @@ let state_h init = handler
   | finally ?f => f init
 end
 
-do with state_h a handle set b; get
+do with state_h a handle set b; get end
 (* One-time handlers can be defined in place *)
 do handle get with get => Type end
 
@@ -236,5 +236,5 @@ do congr_apply (assume x : A in x) (refl (lambda (x : A), x)) eq (refl A) (refl 
 #include_once "everything.m31"
 
 (* both can be used with multiple files at once *)
-#include_once "../std/base.m31" "../std/equal.m31" "../std/base.m31"
+#include_once "../std/base.m31", "../std/equal.m31", "../std/base.m31"
 

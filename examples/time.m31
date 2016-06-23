@@ -1,23 +1,14 @@
 #include_once "peano.m31"
 
-<<<<<<< HEAD
-now betas = add_betas [exp_def,times_def,plus_def,ind_N_Z,ind_N_S] betas
-=======
 now betas = add_betas [exp_def,times_def,plus_def,ind_N_Z,ind_N_S]
->>>>>>> haselwarter/simplify-equal
 
 let rec snf t =
   match t with
   | |- ?e1 ?e2 =>
     let e = (snf e1) (snf e2) in
-    match do_whnf e with
-<<<<<<< HEAD
-      | Some (|- _ : _ == ?e) => snf e
-      | None => e
-=======
-      | (Some (|- _ : _ == ?e), _) => snf e
-      | (None, _) => e
->>>>>>> haselwarter/simplify-equal
+    match whnf e with
+      | ⊢ _ : e ≡ e => e
+      | ⊢ _ : _ ≡ ?e => snf e
     end
   | _ => match whnf t with |- _ : _ == ?e => e end
   end
@@ -28,10 +19,10 @@ let t_2_7 =
   time () (snf (exp two seven))
 
 do
-  let _ = print "already_evaluated" in
-  time () t_2_7
+  let _ = print "already_evaluated:" in
+  let _ = time () t_2_7 in ()
 
-(* The partially applied t_0 measures the cumulative time since receiving 'tt. *)
+(* The partially applied t_0 measures the cumulative time since receiving () *)
 let t_0 = time ()
-let t_0_to_1 = t_0 (snf (exp two seven))
-let t_0_to_2 = t_0 (snf (exp two seven))
+let t_0_to_1 = t_0 (let _ = snf (exp two seven) in ())
+let t_0_to_2 = t_0 (let _ = snf (exp two seven) in ())
