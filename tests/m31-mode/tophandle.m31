@@ -1,0 +1,33 @@
+
+handle
+ | nonary_op : t =>
+     x
+
+ | nonary_op : t =>
+     y
+
+ | nonary_op =>
+   y
+end
+
+handle
+    (* The first | may be omitted in all matching-like statements *)
+    unary_op _ =>
+        (* Operations and data constructors are curried, but must be fully applied. *)
+        rgb_color dummy dummy dummy
+
+ (*
+      A top-level case for an operation `op` replaces any previously installed top-level case for `op`.
+      In order to avoid confusion, patterns are not allowed for top-level cases.
+      Then to preserve functionality a case `op : ?t => c` will assign
+      `None` to `t` if the operation was emitted in infer mode,
+      and `Some v` if it was emitted in checking mode for type `v`.
+  *)
+ | nonary_op : ?t =>
+   (* Meta-level matching of values. Patterns are not linear. On
+           judgements, equality is alpha equality. *)
+   match t with
+    | None => black
+    | Some ?t => black
+   end
+end

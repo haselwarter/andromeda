@@ -1,0 +1,192 @@
+
+(** Toplevel commands *)
+
+mltype dummy = | dummy end
+mltype dummy = dummy of x end
+
+mltype color =
+ | black
+ | rgb_color of
+       dummy and
+       dummy
+       and
+       dummy
+ | rgb_color of dummy and dummy and dummy
+end
+
+do
+  let x = refl A : B in
+  x x
+
+do
+  handle A : B with
+   | foo => bar
+  end
+
+do
+  handle (A, B) with
+   | foo => bar
+  end
+
+do
+  match A : B with
+   | foo => bar
+  end
+
+do
+  match (A, B) with
+         | foo => bar
+  end
+
+do
+  handle refl A : B with
+   | as_eq _ => yield (Some B_eq)
+   | ⊢ foo ⇒
+     bar
+  end
+
+do x
+
+handle
+ (* The first | may be omitted in all matching-like statements *)
+ | unary_op _ =>
+   (* Operations and data constructors are curried, but must be fully applied. *)
+   rgb_color dummy dummy dummy
+
+(*
+  A top-level case for an operation `op` replaces any previously installed top-level case for `op`.
+  In order to avoid confusion, patterns are not allowed for top-level cases.
+  Then to preserve functionality a case `op : ?t => c` will assign
+    `None` to `t` if the operation was emitted in infer mode,
+    and `Some v` if it was emitted in checking mode for type `v`.
+ *)
+   (* | nonary_op : ?t => *)
+   (*   (\* Meta-level matching of values. Patterns are not linear. On judgements, equality is alpha equality. *\) *)
+   (*   match t with *)
+   (*     | None => black *)
+   (*     | Some ?t => black *)
+   (*   end *)
+end
+
+(** Declare operations *)
+(* operation `name : type` *)
+operation unary_op : _ -> color
+operation nonary_op : color
+
+
+(** Declare constants *)
+(* constant `names` : `type` *)
+constant A : (* the type of types *) Type
+constant a b : A
+(* Ocaml-style infixes are valid `name`s and `label`s *)
+constant ( + ) ( * ) ( ^ ) ( - ) ( <= ) :
+  (* non-dependent product type *) A -> A -> A
+
+do A :: A
+
+do A (Π A : Type,
+          A →
+          Type)
+do Type Type
+
+do A
+
+do lambda x, x
+
+do A
+
+
+do lambda (x y z w : A),
+   x
+
+(* Infixes and prefixes are printed as such. *)
+do lambda (x y z w : A),
+   x + y *
+   z ^ x ^ y
+   - (z ^ x) ^ y
+   <= w
+
+(** Install a top level handler *)
+(*
+  Top level handlers are callbacks for operations. Therefore `yield` is not available.
+  A top level case `op => c` is equivalent to a handler case `op => yield c`.
+
+  Unlike handlers, operations emitted inside a top-level case will be handled by the top-level handler.
+  Therefore a case `op => op` will loop (and consume large amounts of memory fast).
+ *)
+
+
+
+do
+  now x y z =
+      y in
+  now f a = a in
+  now g _ = f in g
+                 _ f 3
+
+do
+  foo
+  ==
+  bar ==
+      (baz
+       ==
+       boo)
+
+do
+  foo
+  ==
+  bar ==
+      baz
+
+fail
+  a == (b ==
+           c)
+
+do
+  a ==
+    b
+
+do
+  a ==
+    (b ==
+        c)
+
+constant A : Type
+constant A : Type
+do A : Type
+
+constant B :
+    Type
+
+do foo bar
+
+constant B :
+    Type
+
+fail foo bar
+do foo bar
+
+
+constant AA
+         Bcd
+         E :
+    Type
+(* foo
+   bar *)
+constant
+    C :
+    Type
+
+do foo bar
+
+constant x : Type
+
+do foo bar
+
+constant x : Type
+fail baa
+
+(*  *)
+constant x : Type
+
+do faa

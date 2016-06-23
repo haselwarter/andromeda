@@ -1,0 +1,49 @@
+
+(* Infixes and prefixes are printed as such. *)
+do lambda (x y z w : A), x + y * z ^ x ^ y - (z ^ x) ^ y <= w
+
+(** Install a top level handler *)
+(*
+  Top level handlers are callbacks for operations. Therefore `yield` is not available.
+  A top level case `op => c` is equivalent to a handler case `op => yield c`.
+
+  Unlike handlers, operations emitted inside a top-level case will be handled by the top-level handler.
+  Therefore a case `op => op` will loop (and consume large amounts of memory fast).
+ *)
+
+now x y z = Type
+
+
+do
+  now x y z =
+      y in
+  now f a = a in
+  now g _ = f in g
+                 x f 3
+
+do x
+   foo
+   ==
+   bar ==
+       (baz
+        ==
+        boo)
+
+do
+  foo
+  ==
+  bar ==
+      baz
+
+fail
+  a == (b ==
+           c)
+
+do
+  a ==
+    b
+
+do
+  a ==
+    (b ==
+        c)

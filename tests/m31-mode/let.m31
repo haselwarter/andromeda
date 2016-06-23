@@ -1,0 +1,26 @@
+(* coucou *)
+
+let x y = y
+and y = z
+
+do let f a = Type in
+   f g x
+
+let x y = y
+
+do let f a = Type
+   and g x = f in
+   f g x
+
+do let f a = Type in
+   f g x
+
+do let f a = Type
+   and g x = f in
+   fun x =>
+     let x = 3 in
+     let x = x in
+     f x
+
+do let f a = Type in
+   Type

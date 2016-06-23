@@ -1,0 +1,36 @@
+
+(** Toplevel commands *)
+
+mltype dummy = | dummy end
+
+mltype color =
+ | black
+ | rgb_color of dummy
+                and dummy and dummy
+                and dummy
+                and dummy and
+                dummy and
+                dummy
+ | rgb_color of dummy and
+                dummy and dummy
+                and dummy
+                and dummy and
+                dummy and
+                dummy
+ | rgb_color of
+       dummy
+       and dummy and dummy
+       and dummy
+       and dummy and
+       dummy and
+       dummy
+ | rgb_color
+   of
+       dummy
+       and dummy and dummy
+       and dummy
+       and dummy and
+       dummy and
+       dummy
+ | rgb_color of dummy and dummy and dummy
+end

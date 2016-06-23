@@ -1,0 +1,54 @@
+(** Declare constants *)
+(* constant `names` : `type` *)
+constant A : (* the type of types *) Type
+constant a, b : A
+(* Ocaml-style infixes are valid `name`s and `label`s *)
+constant ( + ), ( * ), ( ^ ), ( - ), ( <= ) :
+    (* non-dependent product type *) A -> A -> A
+
+(** Declare operations *)
+(* operation `name : type` *)
+mltype color = end
+operation unary_op : _ -> color
+operation nonary_op : color
+
+constant Aa : Type
+constant Ab : Type
+do A : Type
+
+constant B :
+    Type
+
+fail A B
+
+constant Bb :
+    Type
+
+constant foo : Type
+constant bar : Type → Type
+fail foo bar
+do bar foo
+
+constant AA,
+         Bcd,
+         E :
+    Type
+(* foo
+   bar *)
+constant
+    C :
+    Type
+
+do bar foo
+
+constant x : Type
+
+do bar foo
+
+constant y : Type
+fail x y
+
+(*  *)
+constant z : Type
+
+do z

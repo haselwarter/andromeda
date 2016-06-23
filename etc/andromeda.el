@@ -5,9 +5,9 @@
 
 (defun m31--find-executable nil
   (let ((d (locate-dominating-file
-            (or buffer-file-name default-directory) "andromeda.byte")))
+            (or buffer-file-name default-directory) "andromeda.native")))
     (if d
-        (concat d "andromeda.byte")
+        (concat d "andromeda.native")
       "andromeda")))
 
 (defun m31--set-executable nil
@@ -25,76 +25,123 @@
 
 
 ;;; Syntax highlighting
+(defvar m31-symbolchars '("!" "$" "%" "&" "*" "+" "-" "." "/" ":" "<" "=" ">" "?" "@" "^" "|" "~"))
+(defvar m31-prefixop '("~" "?" "!"))
+(defvar m31-infixop '("=" "<" ">" "|" "&" "$" "@" "^" "+" "-" "*" "/" "%" "**"))
 
-(defface m31-keyword-face '((t (:inherit font-lock-keyword-face)))
-  "The face used to highlight M31 keywords."
-  :group 'm31)
+(defvar m31-anonymous "_")
+
+(defvar m31-meta-keywords
+  '("_sig" "_struct" "_proj" "_atom" "assume" "data" "do" "end"
+    "extensionality" "external" "finally" "fail" "handle" "handler"
+    "hypotheses" "let" "match" "reduction" "congr_prod" "congr_lambda"
+    "congr_apply" "congr_eq" "congr_refl" "and" "yield" "fun"
+    "in" "operation" "rec" "ref" "val" "where" "with"))
+
+(defvar m31-tt-keywords '("constant" "dynamic" "signature" "as"
+                          "forall" "∀" "Π" "∏"
+                          "lambda" "λ"
+                          "refl"
+                          "=="
+                          "≡"
+                          "|-" "⊢"
+                          "Type"))
+
+
+
+(defface m31-meta-face '((t (:inherit font-lock-keyword-face)))
+         "The face used to highlight m31 meta keywords."
+         :group 'm31)
+
+(defface m31-tt-face '((t (:inherit font-lock-type-face)))
+         "The face used to highlight m31 TT keywords."
+         :group 'm31)
 
 (defface m31-variable-name-face '((t (:inherit font-lock-function-name-face)))
-  "The face used to highlight M31 tactics."
-  :group 'm31)
+         "The face used to highlight m31 variables."
+         :group 'm31)
 
 (defface m31-name-face '((t (:inherit font-lock-variable-name-face)))
-  "The face used to highlight m31 names."
-  :group 'm31)
+         "The face used to highlight m31 names."
+         :group 'm31)
 
 (defface m31-comment-face '((t (:inherit font-lock-comment-face)))
-  "The face used to highlight m31 comments."
-  :group 'm31)
+         "The face used to highlight m31 comments."
+         :group 'm31)
 
 (defconst m31-builtins '("reduce"))
 (defface m31-builtin-face '((t (:inherit font-lock-builtin-face)))
          "The face for builtin keywords of Andromeda" :group 'm31)
 
-(defconst m31-topcomputations '("Axiom" "assume" "Let" "Parameter" "Check")
-  "Vernacular for `m31-mode'.")
-(defface m31-topcomputation-face '((t (:inherit font-lock-keyword-face)))
-         "The face for the Andromea vernacular" :group 'm31)
+;; (defconst m31-topcomputations '("constant" "let" "do" "handle" "fail" "signature")
+;;   "Vernacular for `m31-mode'.")
+;; (defface m31-topcomputation-face '((t (:inherit font-lock-keyword-face)))
+;;          "The face for the Andromea vernacular" :group 'm31)
 
-(defvar m31-topdirectives '("#context" "#help" "#include" "#quit" "#verbosity"))
+(defvar m31-topdirective-keywords
+  '("#environment" "#help" "#quit" "#verbosity" "#include" "#include_once"))
 (defface m31-topdirective-face '((t (:inherit font-lock-warning-face)))
          "The face for toplevel directives such as \"#help\" or \"#include\"")
 
 ;;  '("->" "⟶" "=>" "⟹")
 
-(defvar m31-computations
-  '("Beta" "beta"
-    "Eta" "eta"
-    "Hint" "hint"
-    "Inhabit" "inhabit"
-    "Unhint" "unhint"
-    "refl" "≡" "=="
-    ;; ":"
-    "Type"
-    "whnf")
+(defvar m31-computation-keywords
+  '("refl" "≡" "==" ":"
+    ;; "Type"
+    )
 
   "A list of the computations to be highlighted in Andromeda mode.")
 
-(defface m31-computation-face
- '((t (:inherit font-lock-constant-face)))
-  "The face used to highlight m31 computations."
-  :group 'm31)
+;; (defface m31-computation-face
+;;  '((t (:inherit font-lock-constant-face)))
+;;   "The face used to highlight m31 computations."
+;;   :group 'm31)
 
-(defvar m31-binders '("Let" "let" "assume" "Axiom" "Parameter"))
+(defvar m31-meta-binders
+  (rx (sequence
+       word-start
+       (| (regexp "let\\(?:[[:space:]]+rec\\)?") "assume" "now")
+       word-end)))
+
+(defvar m31-meta-declarations
+  (rx (sequence
+       word-start
+       (| "signature" "data" "constant" "dynamic" "operation")
+       word-end)))
+
 (defface m31-binder-face '((t (:inherit font-lock-function-name-face)))
          "The face used for binders" :group 'm31)
 
 (defvar m31--abstraction-end '("⟹" "=>" "⟶" "->" ","))
-(defvar m31-abstractions '("Π" "forall" "∀" "λ" "fun" "[" "]" "⟹" "=>"))
-(defface m31-abstraction-face '((t (:inherit font-lock-type-face)))
-         "The face used for abstractions" :group 'm31)
 
-(defvar m31-borings '("," ";" "." "let" "and" "in" ":="))
+;; (defvar m31-abstraction-keywords '("∏" "Π" "forall" "∀"
+;;                            "λ" "lambda"
+;;                            "fun" "⟹" "=>"))
+;; (defface m31-abstraction-face '((t (:inherit font-lock-type-face)))
+;;          "The face used for abstractions" :group 'm31)
+
+(defvar m31-boring-keywords '("do" "," ";" "." "let" "rec" "and" "now" "in" "="))
 (defface m31-boring-face '((t (:inherit font-lock-preprocessor-face)))
          "The face used for boring kewords such as \"let\"")
 
+(defvar m31-pvar-rx (rx "?" (+ (any word))))
+(defface m31-pvar-face '((t (:inherit font-lock-variable-name-face)))
+         "The face used for pattern variables" :group 'm31)
+
 (defvar m31-syntax-classes
-  '(abstraction boring computation topdirective topcomputation builtin))
+  '(;; abstraction
+    boring
+                topdirective ;; topcomputation
+                ;; builtin
+                meta tt
+                ;; computation
+                ))
+
 
 (defun m31-font-lock-mk (name)
   (cl-flet ((f (suf)
                (intern (concat "m31-" (symbol-name name) suf))))
-    (list (regexp-opt (symbol-value (f "s")) 'symbols) 1 `',(f "-face"))))
+    (list (regexp-opt (symbol-value (f "-keywords")) 'symbols) 1 `',(f "-face"))))
 
 (defvar m31-binder-face 'm31-binder-face)
 (defvar m31-name-face 'm31-name-face)
@@ -106,12 +153,19 @@
    (append
     '(("\\<¬\\>" 0 'font-lock-negation-char-face))
 
-    (let* ((r (regexp-opt m31-binders 'symbols))
-           (n (regexp-opt-depth r)))
+    (let* ((r  m31-meta-binders)
+           (n (1+ (regexp-opt-depth r))))
       `((,(concat
-           r
-            "[[:space:]]*\\(\\_<\\(:?\\w\\|\\s_\\)+\\_>\\)")
-            ,(1+ n) '(m31-binder-face))))
+           r "[[:space:]]*\\(\\_<\\(\\w\\|\\s_\\)+\\_>\\)")
+         ,n '(m31-binder-face))))
+
+    (let* ((r  m31-meta-declarations)
+           (n (1+ (regexp-opt-depth r))))
+      `((,(concat
+           r "[[:space:]]*(?\\(\\_<\\(\\w\\|\\s_\\)+\\_>\\))?")
+         ,n '(m31-binder-face))))
+
+    `((,m31-pvar-rx 0 'm31-pvar-face))
 
     (mapcar 'm31-font-lock-mk m31-syntax-classes))))
 
@@ -155,6 +209,7 @@
     ("beta" . "HINT")
     ("Beta" . "TOPHINT")
     ("Check" . "TOPCHECK")
+    ("dynamic" . "DYNAMIC")
     ("whnf" . "WHNF")
     ("eta" . "HINT")
     ("Eta" . "TOPHINT")
@@ -167,6 +222,7 @@
     ("Inhabit" . "TOPHINT")
     ("Let" . "TOPLET")
     ("let" . "LET")
+    ("now" . "NOW")
     ("Parameter" . "PRIMITIVE")
     ("reduce" . "REDUCE")
     ("forall" . "FORALL")

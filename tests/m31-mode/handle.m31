@@ -1,0 +1,140 @@
+do
+  with
+   state_h x
+   handle
+       set x 2;
+       get
+  end
+
+(* One-time handlers can be defined in place *)
+do handle get with get => Type end
+
+
+do
+  handle Some with
+   | coerce (|- _ : ?A) ?B => None
+  end
+
+
+
+let instantiate imps a b =
+    match imp_atoms imps a with
+     | (None , None) => None
+     | None + None => None
+     | (~~ Noen) => Noen
+     | Noen => Noen
+     | [None , None] => None
+     | Some ((|- ?imp : ?impT), ?r, ?xs) =>
+       let solution =
+           handle Some (lambdafy xs b : impT) with
+            | coerce (|- _ : ?A) ?B =>
+              match equal_ty imps A B with
+               | Some ?zeta => yield (Convertible zeta)
+               | None => None
+              end
+           end
+       in
+       match solution with
+        | None => None
+        | Some ?solution =>
+          match occurs_check imps imp solution with
+           | None =>
+             assume xi : imp == solution in
+             r := Some xi ;
+                  equal_term imps a b
+           | Some _ => None
+          end
+       end
+    end
+
+let instantiate imps a b =
+    match imp_atoms imps a with
+     | None => None
+     | Some ((|- ?imp : ?impT), ?r, ?xs) =>
+       let solution =
+           handle
+               Some (lambdafy xs b : impT)
+           with
+            coerce (|- _ : ?A) ?B =>
+             match equal_ty imps A B with
+              | Some ?zeta => yield (Convertible zeta)
+              | None => None
+             end
+           end
+       in
+       match solution with
+        | None => None
+        | Some ?solution =>
+          match occurs_check imps imp solution with
+           | None =>
+             assume xi : imp == solution in
+             r := Some xi ;
+                  equal_term imps a b
+           | Some _ => None
+          end
+       end
+    end
+
+
+
+do
+  handle refl A : B with
+   | as_eq _ => yield (Some B_eq)
+   | ⊢ foo ⇒
+     bar
+  end
+
+do x
+
+handle
+ (* The first | may be omitted in all matching-like statements *)
+ | unary_op _ =>
+   (* Operations and data constructors are curried, but must be fully applied. *)
+   rgb_color dummy dummy dummy
+
+ (*
+   A top-level case for an operation `op` replaces any previously installed top-level case for `op`.
+   In order to avoid confusion, patterns are not allowed for top-level cases.
+   Then to preserve functionality a case `op : ?t => c` will assign
+   `None` to `t` if the operation was emitted in infer mode,
+   and `Some v` if it was emitted in checking mode for type `v`.
+  *)
+ | nonary_op : ?t =>
+   x
+
+ | nonary_op : ?t =>
+   (* Meta-level matching of values. Patterns are not linear. On judgements, equality is alpha equality. *)
+   match t with
+    | None => black
+    | Some ?t => black
+   end
+end
+
+handle
+ | nonary_op : ?t =>
+   x
+
+ | nonary_op : t =>
+     y
+
+ | nonary_op =>
+   y
+end
+
+handle
+(* The first | may be omitted in all matching-like statements *)
+unary_op _ =>
+    (* Operations and data constructors are curried, but must be fully applied. *)
+    rgb_color dummy dummy dummy
+
+ (*
+      A top-level case for an operation `op` replaces any previously installed top-level case for `op`.
+  *)
+ | nonary_op : ?t =>
+   (* Meta-level matching of values. Patterns are not linear. On
+           judgements, equality is alpha equality. *)
+   match t with
+    | None => black
+    | Some ?t => black
+   end
+end

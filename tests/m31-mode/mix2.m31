@@ -1,0 +1,51 @@
+(* `assume x : t in c` creates a new free variable `xi : t`
+   where `xi` is an atom based on the given name,
+   then binds `x` to it within `c`.
+   Note that `xi` may (and often does) escape this scope. *)
+do
+  assume t : Type in
+  assume x : t in
+  (x y)
+
+(** Top level let-binding *)
+let x0 = dummy
+
+(** Evaluate a computation *)
+(* This may have side effects through `ref` *)
+do x0
+
+(** Evaluate a failing computation *)
+(* This may not have side effects, it only verifies that the computation fails and fails if it does not. *)
+fail Type Type
+
+(** Change verbosity level *)
+verbosity 3
+do refl Type : Type == Type
+verbosity 2 (* default *)
+
+(** Non top level constructs *)
+
+(** Checking mode and infer mode *)
+(* Most computations are evaluated in a naive way.
+   However if we know that a computation should evaluate to a term of a given type,
+   a more refined strategy can be used: *)
+fail lambda T x, x
+
+(* Type ascription `c : c'` is one way to evaluate in checking mode.
+   Checking mode allows inferring type annotations for the arguments of a lambda. *)
+do (lambda T x, x) : forall (A : Type), A -> A
+
+(* Checking mode is preserved by some constructs but not all: *)
+do (let _ = Type in lambda x, x) : A -> A
+fail handle (lambda x, x) with end
+
+(** Meta functions *)
+
+(* We have mutual recursive definitions.  *)
+(* Top-level recursive definition: *)
+let rec f x = ("f", g x)
+    and g y = ("g", y)
+(* And local recursive definition: *)
+do let rec f x = ("f", g x)
+       and g y = ("g", y) in
+   f x
