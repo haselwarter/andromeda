@@ -135,9 +135,13 @@ module Rule : sig
       ⊢ [J A u C w v p] : C{v, p}
 
       Schema:
-      ⊢ A type    ⊢ u : MV 0     {x : A, p : Id (MV 1) (MV 0) (Bound 0)} ⊢ C type
-      ⊢ w : C{u, refl A u}       ⊢ v : A     ⊢ p : Id A u v
-      ————————————————————————————————————————————————————————————————————————————
+      ⊢ A type
+      ⊢ u : (MV 0){}
+      x : A, p : Id {(MV 1){}, (MV 0){}, (Bound 0)} ⊢ C type
+      ⊢ w : (MV 0){(TmMV 1){}, refl{(TyMV 2){}, (TmMV 1){}}
+      ⊢ v : (TyMV 3){}
+      ⊢ p : Id {(TyMV 4){}, (TmMV 3){}, (TmMV 0){}}
+      ——————————————————————————————————————————————————————
       ⊢ [J A u C w v p] : C{v, p}
 
       Instance:
@@ -146,6 +150,21 @@ module Rule : sig
       ————————————————————————————————————————————————————————————————————————————————
       ⊢ [J A u C w v p] : C{v, p}
 
+
+      Input:
+      ⊢ A type    x : A ⊢ B type    ⊢ s : Π A B    ⊢ t : A
+      ————————————————————————————————————————————————————
+      ⊢ [s t] : B{t}
+
+      Schema:
+      ⊢ A type    {x : (MV 0){}} ⊢ B type    ⊢ s : Π {(MV 1){}, (MV 0){}}    ⊢ t : (MV 2){}
+      —————————————————————————————————————————————————————————————————————————————————————
+      ⊢ [s t] : (MV 2){t}
+
+      Instance:
+      Γ₁ ⊢ A₁ type    Γ₂ | {x : A₂} ⊢ B₁ type    ⊢ s₁ : Π A₃ B₂    ⊢ t₁ : A₄
+      ——————————————————————————————————————————————————————————————————————
+      ⊢ [s t] : B₁{t₁}
 
   *)
   val form_is_type : Schema.is_type -> premise list -> is_type
