@@ -27,10 +27,10 @@ and ty' =
 
 (** An argument of a term or a type constructor *)
 and argument =
-  | ArgIsTerm of term abstraction
+  | ArgIsTerm of (term * ty) abstraction
   | ArgIsType of ty abstraction
-  | ArgEqType
-  | ArgEqTerm
+  | ArgEqType of ((ty * ty) assumptions) abstraction
+  | ArgEqTerm of ((term * term * ty) assumptions) abstraction
 
 (** An abstracted entity. Note that abstractions only ever appear as arguments
    to constructors. Thus we do not carry any type information for the abstracted
@@ -61,19 +61,12 @@ let mk_constant x =
   ; assumptions = Assumption.empty
   }
 
-(* XXX We don't actually abstract [x] because we never unabstracted it. Seems sketchy. *)
-let mk_abstract_argument x = function
-  | ArgIsType abstr -> ArgIsType (Abstract (x, abstr))
-  | ArgIsTerm abstr -> ArgIsTerm (Abstract (x, abstr))
-  | ArgEqType -> ArgEqType
-  | ArgEqTerm -> ArgEqTerm
-
 (* XXX here we have to collect assumptions from the args *)
 let mk_type_constructor c args = failwith "todo"
 
 let mk_arg_is_type t = ArgIsType (NotAbstract t)
 let mk_arg_is_term e = ArgIsTerm (NotAbstract e)
-let mk_arg_eq_type () = ArgEqType
+let mk_arg_eq_type  = ArgEqType
 let mk_arg_eq_term () = ArgEqTerm
 
 let mk_not_abstract e = NotAbstract e

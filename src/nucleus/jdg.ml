@@ -18,8 +18,6 @@ type ctx_entry =
 type ctx = ctx_entry AtomMap.t
 
 (** Every judgement enforces that its context is minimal (strengthened). *)
-
-
 type is_type = IsType of ctx * TT.ty abstraction
 type is_term = IsTerm of ctx * (TT.term * TT.ty) abstraction
 type eq_term = EqTerm of ctx * (TT.term * TT.term * TT.ty) abstraction
@@ -37,7 +35,11 @@ type premise =
 module Concrete = struct
 
   type lctx = (Name.ident * TT.ty) list
-  type hypothetical_jdg = ctx * lctx * bare_jdg
+  type closed = Closed
+  type weak = Weak
+  type strong = Strong
+  type ('lctx_or_closed, 'weak_or_strong) hypothetical_jdg
+    = ctx * 'weak_or_strong * 'lctx_or_closed * bare_jdg
   and  bare_jdg = BareIsType of TT.ty
                 | BareIsTerm of TT.term * TT.ty
                 | BareEqType of TT.ty * TT.ty
@@ -47,25 +49,31 @@ module Concrete = struct
   (* type eq_type = EqType of ctx * lctx * TT.ty * TT.ty *)
   (* type eq_term = EqTerm of ctx * lctx * TT.term * TT.term * TT.ty *)
 
+  type 'a lctx_jdg = LctxJdg of (lctx, 'a) hypothetical_jdg
+  type 'a closed_jdg = ClosedJdg of (closed, 'a) hypothetical_jdg
+
+  type 'a strong_jdg = StrongJdg of ('a, strong) hypothetical_jdg
+  type 'a weak_jdg = StrongJdg of ('a, weak) hypothetical_jdg
+
   let concrete ctx jdg abstr =
     let rec fold lctx = function
       | Abstract (xa, j)  -> fold (xa :: lctx) j
       | NotAbstract j -> jdg ctx (List.rev lctx) j
     in fold [] abstr
 
-  let jdg_is_type ctx lctx a = (ctx, lctx, (BareIsType a))
-  let jdg_is_term ctx lctx (s, a) = (ctx, lctx, (BareIsTerm (s, a)))
-  let jdg_eq_type ctx lctx (a, b) = (ctx, lctx, (BareEqType (a, b)))
-  let jdg_eq_term ctx lctx (s, t, a) = (ctx, lctx, (BareEqTerm (s, t, a)))
+  let jdg_is_type ctx lctx a = (ctx, Strong, lctx, (BareIsType a))
+  let jdg_is_term ctx lctx (s, a) = (ctx, Strong, lctx, (BareIsTerm (s, a)))
+  let jdg_eq_type ctx lctx (a, b) = (ctx, Strong, lctx, (BareEqType (a, b)))
+  let jdg_eq_term ctx lctx (s, t, a) = (ctx, Strong, lctx, (BareEqTerm (s, t, a)))
   let is_type (IsType (ctx, abstr)) = concrete ctx jdg_is_type abstr
   let is_term (IsTerm (ctx, abstr)) = concrete ctx jdg_is_term abstr
   let eq_type (EqType (ctx, abstr)) = concrete ctx jdg_eq_type abstr
   let eq_term (EqTerm (ctx, abstr)) = concrete ctx jdg_eq_term abstr
-  let premise = function
-  | PremiseIsType jdg -> is_type jdg
-  | PremiseIsTerm jdg -> is_term jdg
-  | PremiseEqType jdg -> eq_type jdg
-  | PremiseEqTerm jdg -> eq_term jdg
+  let premise : premise -> (lctx, strong) hypothetical_jdg = function
+    | PremiseIsType jdg -> is_type jdg
+    | PremiseIsTerm jdg -> is_term jdg
+    | PremiseEqType jdg -> eq_type jdg
+    | PremiseEqTerm jdg -> eq_term jdg
 end
 
 (* XXX Ctx.substitute expects closed judgements. If there are other places in
@@ -94,9 +102,9 @@ and shape_is_type =
 (** Auxiliary datatypes used for judgements whose context are not necessarily
    minimal. *)
 
-type weak_is_type = WeakIsType of ctx * TT.ty
+type weak_is_type = WeakIsType of ctx * TT.ty abstraction
 
-type weak_is_term = WeakIsTerm of ctx * TT.term * TT.ty
+type weak_is_term = WeakIsTerm of ctx * (TT.term * TT.ty) abstraction
 
 type weak_is_atom = WeakIsAtom of ctx * Name.atom * TT.ty
 
@@ -320,7 +328,7 @@ module Rule = struct
     and argument =
       | ArgIsType of abstraction * ty
       | ArgIsTerm of abstraction * term
-      | ArgEqType
+      | ArgEqType               (* TODO add abstractions here *)
       | ArgEqTerm
 
     and abstraction = Name.ident list
@@ -332,12 +340,8 @@ module Rule = struct
             | EqType of ty * ty
             | EqTerm of term * term * ty
 
-    type 'a rule_abstraction =
-      | RuleNotAbstract of 'a
-      | RuleAbstract of premise * 'a rule_abstraction
-
-    type is_type = Name.ident * premise list
-    type is_term = Name.ident * premise list * ty
+    type is_type = premise list
+    type is_term = premise list * ty
     type eq_term = premise list * (ty * ty)
     type eq_type = premise list * (term * term * ty)
 
@@ -479,23 +483,32 @@ module Rule = struct
   let check_type ~loc (metas : TT.argument list) (schema : Schema.ty) (premise : TT.ty) =
     if true then failwith "todo"
 
+  let check_term ~loc (metas : TT.argument list) (schema : Schema.term) (premise : TT.term) =
+    if true then failwith "todo"
+
 
   let check_jdg ~loc (metas : TT.argument list) (schema : Schema.jdg) (premise : Concrete.bare_jdg) =
     match (schema, premise) with
-    | Schema.IsType s_ty, Concrete.BareIsType p_ty -> ()
+    | Schema.IsType _s_ty, Concrete.BareIsType _p_ty -> ()
     | Schema.IsTerm (_, s_ty), Concrete.BareIsTerm (_, p_ty) -> check_type ~loc metas s_ty p_ty
-    | Schema.EqType (s_ty1, s_ty2), Concrete.BareEqType (p_ty1, p_ty2) -> failwith "todo"
-    | Schema.EqTerm (s_e1, s_e2, s_ty), Concrete.BareEqTerm (p_e1, p_e2, p_ty) -> failwith "todo"
+    | Schema.EqType (s_ty1, s_ty2), Concrete.BareEqType (p_ty1, p_ty2) ->
+       check_type ~loc metas s_ty1 p_ty1; check_type ~loc metas s_ty2 p_ty2
+    | Schema.EqTerm (s_e1, s_e2, s_ty), Concrete.BareEqTerm (p_e1, p_e2, p_ty) ->
+       check_type ~loc metas s_ty p_ty;
+       check_term ~loc metas s_e1 p_e1;
+       check_term ~loc metas s_e2 p_e2
+
     | _ -> failwith "mismatched premise" (* XXX error: expected schema but got premise *)
 
 
   let arg_of_premise (lctx : Concrete.lctx) (jdg : Concrete.bare_jdg) : TT.argument =
     match jdg with
     | Concrete.BareIsType ty ->
-       let abstr = TT.mk_not_abstract ty in
-    | Concrete.BareIsTerm (_, _) -> (??)
-    | Concrete.BareEqType (_, _) -> (??)
-    | Concrete.BareEqTerm (_, _, _) -> (??)
+       let _abstr = TT.mk_not_abstract ty in
+       failwith "todo"
+    | Concrete.BareIsTerm (_, _) -> failwith "todo"
+    | Concrete.BareEqType (_, _) -> failwith "todo"
+    | Concrete.BareEqTerm (_, _, _) -> failwith "todo"
 
   let rec check_lctxs ~loc metas = function
     | [], [] -> ()
@@ -507,8 +520,8 @@ module Rule = struct
 
   let match_premise ~loc ctx metas
       ((s_lctx, s_jdg) : Schema.premise)
-      (p : premise) : ctx * TT.argument=
-    let ((p_ctx, p_lctx, p_jdg) : ctx * Concrete.lctx * Concrete.bare_jdg) =
+      (p : premise) : ctx * TT.argument =
+    let ((p_ctx, _p_strength, p_lctx, p_jdg) : ctx * 'a * Concrete.lctx * Concrete.bare_jdg) =
       Concrete.premise p
     in
     check_lctxs ~loc metas (s_lctx, p_lctx) ;
@@ -529,9 +542,10 @@ module Rule = struct
     in
     fold Ctx.empty [] (schema_premises, premises)
 
-  let form_is_type ~loc ((c, schema_premises) as _rule : Schema.is_type) premises =
+  let form_is_type ~loc c (schema_premises as _rule : Schema.is_type) premises =
     let ctx, args = match_premises ~loc schema_premises premises in
-    TT.mk_type_constructor c args
+    let ty = TT.mk_type_constructor c args in
+    IsType (ctx, NotAbstract ty)
 
   let form_is_term rule premises = failwith "Rule.form_is_term is not implemented"
 
@@ -707,6 +721,15 @@ let invert_is_term (IsTerm (ctx,e,t)) =
     | TT.TermConstructor (c, args) ->
        assert false (* XXX to do *)
 
+    (* | TT.TermAbstract ((x,a),(e,b)) -> *)
+    (*   let ja = WeakIsType (ctx, a) in *)
+    (*   let WeakIsAtom (ctx, y, _) as jy = Ctx.add_weak ja x in *)
+    (*   let b = TT.unabstract_ty [y] b *)
+    (*   and e = TT.unabstract [y] e in *)
+    (*   let je = WeakIsTerm (ctx, e, b) in *)
+    (*   Abstract (strengthen_atom jy, strengthen je) *)
+
+
     | TT.Bound _ -> assert false
 
 let invert_is_type (IsType (ctx, ty)) =
@@ -716,6 +739,13 @@ let invert_is_type (IsType (ctx, ty)) =
 
   | TT.TypeConstructor (c, args) ->
      assert false (* XXX to do *)
+
+  (* | TT.TypeAbstract ((x,a),b) -> *)
+  (*    let ja = WeakIsType (ctx, a) in *)
+  (*    let WeakIsAtom (ctx, y, _) as jy = Ctx.add_weak ja x in *)
+  (*    let b = TT.unabstract_ty [y] b in *)
+  (*    let jb = WeakIsType (ctx, b) in *)
+  (*    AbstractTy (strengthen_atom jy, strengthen_ty jb) *)
 
   | TT.El e -> El (IsTerm (ctx, e, TT.mk_type ~loc:e.Location.loc))
 

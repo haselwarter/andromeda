@@ -118,8 +118,8 @@ module Rule : sig
       ⊢ [Id A u v]  type
 
       Processed to Schema:
-      ⊢ A type   ⊢ u : MV 0   ⊢ v : MV 1
-      ——————————————————————————————————
+      ⊢ A type   ⊢ u : (MV 0){}   ⊢ v : (MV 1){}
+      ——————————————————————————————————————————
       ⊢ [Id A u v]  type
 
       Instance:
@@ -165,6 +165,11 @@ module Rule : sig
       Γ₁ ⊢ A₁ type    Γ₂ | {x : A₂} ⊢ B₁ type    ⊢ s₁ : Π A₃ B₂    ⊢ t₁ : A₄
       ——————————————————————————————————————————————————————————————————————
       ⊢ [s t] : B₁{t₁}
+
+
+      ⊢ A type    x : A ⊢ B type    ⊢ s : Π A B
+      —————————————————————————————————————————
+      ⊢ s ≡ λ A B ({y : A} (app s 0))
 
   *)
   val form_is_type : Schema.is_type -> premise list -> is_type

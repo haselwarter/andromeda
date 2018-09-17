@@ -58,7 +58,7 @@ val mk_type_constructor : Name.constant -> argument list -> ty
 
 val mk_arg_is_type : ty -> argument
 val mk_arg_is_term : term -> argument
-val mk_arg_eq_type : unit -> argument
+val mk_arg_eq_type : ty -> ty -> argument
 val mk_arg_eq_term : unit -> argument
 
 (** Obsolete *)
@@ -68,8 +68,6 @@ val typ : ty
 
 (** Make a non-abstracted constructor argument *)
 val mk_not_abstract : 'a -> 'a abstraction
-
-val mk_abstract_argument : Name.ident -> argument -> argument
 
 val mk_abstract : (Name.ident -> ?lvl:int -> 'jdg -> 'jdg)
   -> Name.ident -> 'jdg abstraction -> 'jdg abstraction
